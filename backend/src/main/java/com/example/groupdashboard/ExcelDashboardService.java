@@ -494,6 +494,7 @@ public class ExcelDashboardService {
 
   private String outsideProvince(Map<String, Object> person, Map<String, String> labelByKey) {
     String province = firstNonBlank(
+        provinceFromText(excelFieldByLabel(person, labelByKey, "属地划分")),
         String.valueOf(person.getOrDefault("householdProvince", "")),
         excelFieldByLabel(person, labelByKey, "户籍（省）"),
         excelFieldByLabel(person, labelByKey, "户籍(省)"),
@@ -511,6 +512,7 @@ public class ExcelDashboardService {
         text(row, headers, "户籍(省)", formatter),
         text(row, headers, "户籍省", formatter),
         text(row, headers, "省份", formatter),
+        provinceFromText(text(row, headers, "属地划分", formatter)),
         provinceFromText(text(row, headers, "户籍地址", formatter)),
         provinceFromText(text(row, headers, "联系地址", formatter)),
         provinceFromText(text(row, headers, "现住址", formatter))));

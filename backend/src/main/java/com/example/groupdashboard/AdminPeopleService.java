@@ -239,8 +239,9 @@ public class AdminPeopleService {
   private boolean matchesResidenceProvince(Map<String, Object> person, String province) {
     if (province == null || province.isBlank()) return true;
     String normalized = province.trim();
-    return String.valueOf(person.getOrDefault("householdProvince", "")).contains(normalized)
-        || String.valueOf(person.getOrDefault("address", "")).contains(normalized)
+    String householdProvince = String.valueOf(person.getOrDefault("householdProvince", "")).trim();
+    if (!householdProvince.isBlank()) return normalized.equals(householdProvince);
+    return String.valueOf(person.getOrDefault("address", "")).contains(normalized)
         || String.valueOf(person.getOrDefault("currentAddress", "")).contains(normalized);
   }
 
