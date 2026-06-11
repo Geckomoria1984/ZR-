@@ -60,18 +60,12 @@ public class ExcelDashboardService {
         .filter(DashboardDatabaseStore::enabled)
         .map(store -> {
           try {
-            return store.loadOrImport(this::loadDashboard);
+            return store.loadOrImport();
           } catch (IOException exception) {
-            throw new IllegalStateException("无法导入或读取数据库人员数据", exception);
+            throw new IllegalStateException("无法读取数据库人员数据", exception);
           }
         })
-        .orElseGet(() -> {
-          try {
-            return loadDashboard();
-          } catch (IOException exception) {
-            throw new IllegalStateException("无法读取首页 Excel 数据: " + properties.excelPath(), exception);
-          }
-        });
+        .orElseThrow(() -> new IllegalStateException("数据库读取未启用，禁止从 Excel 作为运行时数据源读取"));
     loaded = normalizeDashboardRegions(loaded);
     cache.compareAndSet(null, loaded);
     return cache.get();

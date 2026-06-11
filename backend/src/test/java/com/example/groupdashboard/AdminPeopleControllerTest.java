@@ -3,12 +3,14 @@ package com.example.groupdashboard;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.ByteArrayOutputStream;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -42,6 +44,28 @@ class AdminPeopleControllerTest {
 
   @Autowired
   JdbcTemplate jdbcTemplate;
+
+  @BeforeEach
+  void seedVisiblePeopleThroughImportEndpoint() throws Exception {
+    ByteArrayResource excel = new ByteArrayResource(importWorkbook()) {
+      @Override
+      public String getFilename() {
+        return "测试显名人员.xlsx";
+      }
+    };
+    MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+    body.add("file", excel);
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+    ResponseEntity<Map> imported = rest.postForEntity(
+        "http://localhost:" + port + "/api/admin/people/import-excel",
+        new HttpEntity<>(body, headers),
+        Map.class);
+
+    assertThat(imported.getStatusCode().is2xxSuccessful()).isTrue();
+    assertThat(imported.getBody().get("imported")).isEqualTo(214);
+  }
 
   @Test
   void createsUpdatesAndDeletesPeople() {
@@ -106,8 +130,8 @@ class AdminPeopleControllerTest {
     Map<String, Object> row = rows.get(0);
     Map<String, Object> excelFields = (Map<String, Object>) rows.get(0).get("excelFields");
     assertThat(excelFields).containsKeys("excel_0", "excel_1", "excel_14", "excel_93");
-    assertThat(excelFields.get("excel_2")).isEqualTo(row.get("name"));
-    assertThat(excelFields.get("excel_3")).isEqualTo(row.get("idNumber"));
+    assertThat(excelFields.get("excel_1")).isEqualTo(row.get("name"));
+    assertThat(excelFields.get("excel_2")).isEqualTo(row.get("idNumber"));
     assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM dashboard_person", Integer.class)).isGreaterThan(0);
     assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM dashboard_excel_column", Integer.class)).isGreaterThan(90);
   }
@@ -125,7 +149,7 @@ class AdminPeopleControllerTest {
         .findFirst()
         .orElse(0);
 
-    ResponseEntity<Map> list = rest.getForEntity(baseUrl + "?region=南岗&size=1000", Map.class);
+    ResponseEntity<Map> list = rest.getForEntity(baseUrl + "?region=南岗&excludeLevelGroups=true&size=1000", Map.class);
 
     assertThat(list.getStatusCode().is2xxSuccessful()).isTrue();
     assertThat((Integer) list.getBody().get("total")).isEqualTo(dashboardCount);
@@ -197,8 +221,7 @@ class AdminPeopleControllerTest {
         .extracting(bucket -> bucket.get("count"))
         .isEqualTo(2);
     List<List<List<Object>>> regionRows = (List<List<List<Object>>>) dashboard.getBody().get("regionRows");
-    assertThat(regionRows.get(0)).contains(List.of("南岗", 211));
-    assertThat(regionRows.get(1)).contains(List.of("齐齐哈尔", 1));
+    assertThat(regionRows.get(0)).contains(List.of("南岗", 1));
     assertThat(regionRows.get(1)).doesNotContain(List.of("山东", 1));
     assertThat(regionRows.get(0)).doesNotContain(List.of("道里", 1));
 
@@ -361,7 +384,7 @@ class AdminPeopleControllerTest {
 
     assertThat(dashboard.getStatusCode().is2xxSuccessful()).isTrue();
     assertThat(dashboard.getBody().get("title")).isEqualTo("隐名投资人架构图");
-    assertThat(((List<Map<String, Object>>) dashboard.getBody().get("people"))).hasSize(4);
+    assertThat(((List<Map<String, Object>>) dashboard.getBody().get("people"))).hasSize(2);
 
     Map<String, Object> groups = (Map<String, Object>) dashboard.getBody().get("groups");
     assertThat(((Number) ((Map<String, Object>) groups.get("organizers")).get("count")).intValue()).isEqualTo(1);
@@ -377,8 +400,7 @@ class AdminPeopleControllerTest {
     assertThat(((Number) highAmount.get("count")).intValue()).isEqualTo(1);
 
     List<List<List<Object>>> regionRows = (List<List<List<Object>>>) dashboard.getBody().get("regionRows");
-    assertThat(regionRows.get(0)).contains(List.of("南岗", 1));
-    assertThat(regionRows.get(1)).contains(List.of("齐齐哈尔", 1));
+    assertThat(regionRows.get(0)).contains(List.of("合计", 0));
 
     ResponseEntity<Map> peoplePage = rest.getForEntity(
         "http://localhost:" + port + "/api/dashboard/hidden-investors/people?group=organizers&page=1&size=10",
@@ -386,6 +408,13 @@ class AdminPeopleControllerTest {
     assertThat(peoplePage.getStatusCode().is2xxSuccessful()).isTrue();
     assertThat(peoplePage.getBody().get("total")).isEqualTo(1);
     assertThat(((List<Map<String, Object>>) peoplePage.getBody().get("rows")).get(0).get("name")).isEqualTo("隐名一级甲");
+
+    ResponseEntity<Map> generalPage = rest.getForEntity(
+        "http://localhost:" + port + "/api/dashboard/hidden-investors/people?group=general&page=1&size=10",
+        Map.class);
+    assertThat(generalPage.getStatusCode().is2xxSuccessful()).isTrue();
+    assertThat(generalPage.getBody().get("total")).isEqualTo(1);
+    assertThat(((List<Map<String, Object>>) generalPage.getBody().get("rows")).get(0).get("name")).isEqualTo("隐名三级丙");
   }
 
   @Test
@@ -450,7 +479,7 @@ class AdminPeopleControllerTest {
     try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
       Sheet sheet = workbook.createSheet("Sheet1");
       Row header = sheet.createRow(0);
-      List<String> columns = List.of(
+      List<String> columns = new ArrayList<>(List.of(
           "序号",
           "姓名",
           "身份证号",
@@ -463,7 +492,13 @@ class AdminPeopleControllerTest {
           "前科累计情况",
           "ZR被处置打击人员",
           "属地派出所",
-          "持有中融信托产品份额总数");
+          "持有中融信托产品份额总数",
+          "死亡情况",
+          "丈夫|妻子、XXX、身份证、电话、职业"));
+      while (columns.size() < 93) {
+        columns.add("扩展字段" + columns.size());
+      }
+      columns.add("得分");
       for (int index = 0; index < columns.size(); index++) {
         header.createCell(index).setCellValue(columns.get(index));
       }
@@ -474,7 +509,7 @@ class AdminPeopleControllerTest {
         row.createCell(2).setCellValue("23010019900101" + String.format("%04d", rowIndex));
         row.createCell(3).setCellValue("男");
         row.createCell(4).setCellValue("42");
-        row.createCell(5).setCellValue(rowIndex == 1 ? "三级" : rowIndex == 2 ? "四级" : "一般参与");
+        row.createCell(5).setCellValue(rowIndex == 2 ? "四级" : "三级");
         row.createCell(6).setCellValue("南岗");
         row.createCell(7).setCellValue("南岗");
         row.createCell(8).setCellValue("13900000099");
@@ -627,7 +662,7 @@ class AdminPeopleControllerTest {
       List<String> columns = List.of(
           "姓名",
           "身份证号",
-          "风险级别",
+          "自身等级",
           "省内人员简易户籍",
           "属地派出所",
           "持有中融信托产品份额总数");

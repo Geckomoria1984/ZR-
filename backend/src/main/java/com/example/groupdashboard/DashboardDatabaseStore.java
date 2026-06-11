@@ -33,17 +33,15 @@ public class DashboardDatabaseStore {
   }
 
   @Transactional
-  public synchronized Map<String, Object> loadOrImport(DashboardLoader loader) throws IOException {
-    if (!enabled()) return loader.load();
+  public synchronized Map<String, Object> loadOrImport() throws IOException {
+    if (!enabled()) {
+      throw new IllegalStateException("数据库读取未启用，禁止从 Excel 作为运行时数据源读取");
+    }
     ensureSchema();
 
     Map<String, Object> existing = loadDashboard();
-    if (existing != null && !properties.importOnStartup()) return existing;
     if (existing != null && !peopleTableEmpty()) return existing;
-
-    Map<String, Object> dashboard = loader.load();
-    replace(dashboard);
-    return dashboard;
+    throw new IllegalStateException("数据库暂无显名人员数据，请先在后台导入 Excel 入库后再读取首页");
   }
 
   private void ensureSchema() {
@@ -180,10 +178,5 @@ public class DashboardDatabaseStore {
     } catch (NumberFormatException exception) {
       return 0;
     }
-  }
-
-  @FunctionalInterface
-  public interface DashboardLoader {
-    Map<String, Object> load() throws IOException;
   }
 }

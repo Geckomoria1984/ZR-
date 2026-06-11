@@ -8,4 +8,4 @@ spring:
 dashboard:
   database:
     enabled: true
-    import-on-startup: true
+    import-on-startup: false

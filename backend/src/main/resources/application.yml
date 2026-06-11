@@ -17,7 +17,7 @@ dashboard:
   photo-dir: ${DASHBOARD_PHOTO_DIR:${user.home}/Desktop/测试/显性三万人员照片_汇总}
   database:
     enabled: true
-    import-on-startup: true
+    import-on-startup: false
   cors:
     allowed-origins:
       - http://localhost:5173

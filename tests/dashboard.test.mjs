@@ -183,7 +183,7 @@ describe('dashboard data contract', () => {
       assert.match(html, /class="chart-card amount-chart-card"[\s\S]*@click="openAmountStats"/);
       assert.match(html, /@click="openAmountStats"/);
       assert.match(html, /v-model="amountStatsOpen"/);
-      assert.match(html, /仅统计黑龙江省人员/);
+      assert.match(script, /仅统计黑龙江省人员/);
       assert.match(html, /class="amount-stats-row"/);
       assert.match(html, /@click="openAmountBucket\(bucket\)"/);
       assert.doesNotMatch(html, /amount-bucket-list/);
@@ -207,18 +207,25 @@ describe('dashboard data contract', () => {
     for (const { html, script } of homeArtifacts()) {
       assert.match(html, /本市区县分布/);
       assert.match(html, /省内外地市户籍分布/);
+      assert.match(html, /各省人员户籍分布/);
       assert.match(html, /v-for="segment in cityDistrictSegments"/);
       assert.match(html, /class="district-pie-segment"/);
       assert.match(html, /:d="segment\.path"/);
       assert.doesNotMatch(html, /cityDistrictSegments[\s\S]*:stroke-dasharray="segment\.dash"/);
       assert.match(html, /@click\.stop="openDrawerForRegion\(segment\.bucket\.label\)"/);
-      assert.match(html, /:style="provinceCityPieStyle"/);
-      assert.match(html, /class="pie pie-stock"/);
+      assert.match(html, /v-for="segment in provinceCitySegments"/);
+      assert.match(html, /v-for="segment in outsideProvinceSegments"/);
+      assert.match(html, /openProvinceCityStats/);
+      assert.match(html, /openOutsideProvinceStats/);
+      assert.match(html, /openProvinceCityRegion\(segment\.bucket\.label\)/);
+      assert.match(html, /openOutsideProvinceRegion\(segment\.bucket\.label\)/);
       assert.doesNotMatch(html, /donut-stock/);
       assert.match(html, /@click="openDrawerForRegion\(name\)"/);
-    assert.match(html, /v-loading="regionLoading \|\| groupLoading"/);
+      assert.match(html, /v-loading="regionLoading \|\| groupLoading"/);
       assert.match(script, /regionRows\[0\]/);
       assert.match(script, /regionRows\[1\]/);
+      assert.match(script, /provinceCityLabelTransform/);
+      assert.match(script, /outsideProvinceLabelTransform/);
       assert.match(script, /drawerMode = 'region'/);
       assert.match(script, /region,/);
       assert.match(script, /\/api\/admin\/people\?\$\{params\.toString\(\)\}/);
