@@ -1,0 +1,15 @@
+.DS_Store
+
+# IDE / local workspace
+.idea/
+
+# Build outputs
+target/
+backend/target/
+
+# Local runtime data
+backend/data/
+*.log
+
+# Dependency caches
+node_modules/

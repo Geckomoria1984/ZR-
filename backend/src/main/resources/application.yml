@@ -1,0 +1,26 @@
+server:
+  port: 8080
+
+spring:
+  servlet:
+    multipart:
+      max-file-size: 200MB
+      max-request-size: 220MB
+  datasource:
+    url: jdbc:h2:file:./data/group-dashboard;MODE=MySQL;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+dashboard:
+  excel-path: ${DASHBOARD_EXCEL_PATH:${user.home}/Desktop/测试/（0530）测试.xlsx}
+  photo-dir: ${DASHBOARD_PHOTO_DIR:${user.home}/Desktop/测试/显性三万人员照片_汇总}
+  database:
+    enabled: true
+    import-on-startup: true
+  cors:
+    allowed-origins:
+      - http://localhost:5173
+      - http://127.0.0.1:5173
+      - http://localhost:5174
+      - http://127.0.0.1:5174

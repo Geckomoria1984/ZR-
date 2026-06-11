@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>人员信息管理</title>
+    <link rel="stylesheet" href="/vendor/element-plus.css?v=local-20260608">
+    <link rel="stylesheet" href="/src/styles.css?v=fund-node-wide-color-20260609">
+  </head>
+  <body class="admin-body">
+    <div id="adminApp" class="admin-app" v-cloak>
+      <header class="admin-topbar">
+        <h1>人员信息管理</h1>
+        <div class="admin-actions">
+          <el-button type="primary" @click="openCreate">新增人员</el-button>
+          <el-button @click="openDataImport">导入数据</el-button>
+          <el-button @click="openFundImport">导入资金关系</el-button>
+          <el-button @click="openPhotoImport">导入照片</el-button>
+          <el-button type="primary" @click="goDashboard">数据分析</el-button>
+        </div>
+      </header>
+
+      <section class="admin-filter-panel">
+        <label>任务名称<el-select v-model="filters.task"><el-option label="人员架构" value="人员架构"></el-option></el-select></label>
+        <label>姓名<el-input v-model="filters.name" placeholder="请输入姓名" clearable></el-input></label>
+        <label>身份证号<el-input v-model="filters.idNumber" placeholder="请输入身份证号" clearable></el-input></label>
+        <label>性别<el-select v-model="filters.gender" placeholder="请选择性别" clearable><el-option label="男" value="男"></el-option><el-option label="女" value="女"></el-option></el-select></label>
+        <label>年龄<el-input v-model="filters.age" placeholder="请输入年龄" clearable></el-input></label>
+        <el-button type="primary" @click="loadPeople">查询</el-button>
+        <el-button @click="resetFilters">重置</el-button>
+        <el-button link type="primary">更多条件</el-button>
+      </section>
+
+      <section class="admin-table-wrap">
+        <el-alert v-if="loadError" class="admin-load-error" type="error" :title="`人员数据加载失败：${loadError}`" :closable="false"></el-alert>
+        <el-table :data="people" border height="calc(100vh - 292px)" v-loading="loading">
+          <el-table-column
+            v-for="column in tableColumns"
+            :key="column.key"
+            :label="column.label"
+            :width="column.width"
+            :fixed="column.fixed"
+            show-overflow-tooltip
+          >
+            <template #default="{ row }">
+              <span class="admin-cell-text">{{ cellText(row, column) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="230" fixed="right">
+            <template #default="{ row }">
+              <el-button link type="primary" @click="openFunds(row)">资金关联</el-button>
+              <el-button link type="primary" @click="openRelations(row)">关联人</el-button>
+              <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
+              <el-button link type="primary" @click="openPhoto(row)">图片</el-button>
+              <el-button link type="danger" @click="removePerson(row)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+        <footer class="admin-pagination">
+          <span>共 {{ total }} 条</span>
+          <el-pagination layout="prev, pager, next, sizes" :total="total" v-model:current-page="page" v-model:page-size="size" @change="loadPeople"></el-pagination>
+        </footer>
+      </section>
+
+      <el-dialog v-model="formOpen" class="admin-person-dialog" width="72vw" top="4vh" :show-close="false">
+        <template #header>
+          <div class="admin-dialog-head">
+            <span></span>
+            <h2>{{ editingId ? '编辑人员' : '新增人员' }}</h2>
+            <el-button text @click="formOpen = false">×</el-button>
+          </div>
+        </template>
+        <el-form :model="form" label-position="top" class="admin-person-form">
+          <el-form-item label="* 任务"><el-select v-model="form.task"><el-option label="人员架构" value="人员架构"></el-option></el-select></el-form-item>
+          <el-form-item label="* 姓名"><el-input v-model="form.name" placeholder="请输入姓名"></el-input></el-form-item>
+          <el-form-item label="* 身份证号"><el-input v-model="form.idNumber" placeholder="请输入身份证号"></el-input></el-form-item>
+          <el-form-item label="* 性别"><el-radio-group v-model="form.gender"><el-radio label="男"></el-radio><el-radio label="女"></el-radio></el-radio-group></el-form-item>
+          <el-form-item label="* 年龄"><el-input-number v-model="form.age" :min="0" :max="120"></el-input-number></el-form-item>
+          <el-form-item label="属地"><el-input v-model="form.district" placeholder="请输入属地"></el-input></el-form-item>
+          <el-form-item label="标签"><el-select v-model="form.risk" placeholder="请选择标签"><el-option label="组织串联" value="组织串联"></el-option><el-option label="活跃响应" value="活跃响应"></el-option><el-option label="一般参与" value="一般参与"></el-option><el-option label="密切关注" value="密切关注"></el-option></el-select></el-form-item>
+          <el-form-item label="户籍地"><el-input v-model="form.address" placeholder="请输入"></el-input></el-form-item>
+          <el-form-item label="特殊群体数量"><el-input-number v-model="form.visits" :min="0"></el-input-number></el-form-item>
+          <el-form-item label="属地划分"><el-input v-model="form.locality" placeholder="请输入属地划分"></el-input></el-form-item>
+          <el-form-item label="联系电话"><el-input v-model="form.phone" placeholder="请输入联系电话"></el-input></el-form-item>
+          <el-form-item label="实收信托金额"><el-input v-model="form.amount" placeholder="请输入实收信托金额"></el-input></el-form-item>
+          <el-form-item label="职业分类"><el-input v-model="form.occupation" placeholder="请输入职业分类"></el-input></el-form-item>
+          <el-form-item label="从业单位"><el-input v-model="form.occupation" placeholder="请输入从业单位"></el-input></el-form-item>
+          <el-form-item label="突出行为"><el-input v-model="form.behavior" placeholder="请输入突出行为"></el-input></el-form-item>
+          <el-form-item label="其他投资"><el-input v-model="form.otherInvestment" placeholder="请输入其他投资"></el-input></el-form-item>
+          <el-form-item label="关联人基本情况"><el-input v-model="form.relatedPerson" placeholder="请输入关联人基本情况"></el-input></el-form-item>
+          <el-form-item label="公安预警"><el-select v-model="form.policeWarning"><el-option label="有" value="有"></el-option><el-option label="无" value="无"></el-option></el-select></el-form-item>
+          <el-form-item label="到访情况"><el-input v-model="form.visitDetail" placeholder="请输入到访情况"></el-input></el-form-item>
+          <el-form-item label="就诊情况"><el-input v-model="form.latestNote" type="textarea" placeholder="请输入就诊情况"></el-input></el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="formOpen = false">取消</el-button>
+          <el-button type="primary" @click="savePerson">保存</el-button>
+        </template>
+      </el-dialog>
+
+      <el-dialog v-model="profileOpen" class="profile-dialog detail-dialog admin-person-detail-dialog" width="98vw" top="1vh" :show-close="false">
+        <section v-if="activePerson" class="admin-person-detail" aria-labelledby="adminProfileName">
+          <header class="detail-titlebar">
+            <span></span>
+            <h2>人员详情</h2>
+            <el-button class="detail-close" text @click="profileOpen = false" aria-label="关闭人员详情">×</el-button>
+          </header>
+          <div class="detail-layout">
+            <aside class="detail-sidebar">
+              <h3><span class="detail-icon">♟</span>{{ activePerson.risk || '人员信息' }}</h3>
+              <div class="detail-photo" :class="`portrait-${activePerson.avatarIndex % 8}`">
+                <img v-if="activePerson.photoUrl" :src="activePerson.photoUrl" :alt="`${activePerson.name}照片`">
+                <span v-else>{{ activePerson.name.slice(0, 1) }}</span>
+              </div>
+              <strong id="adminProfileName">{{ activePerson.name }}</strong>
+              <b>{{ activePerson.age }}岁&nbsp;&nbsp;{{ activePerson.gender }}&nbsp;&nbsp;{{ activePerson.nation || '汉族' }}</b>
+              <p>{{ activePerson.idNumber }}</p>
+              <div class="detail-relation-actions">
+                <el-button type="primary" @click="openFundGraph(activePerson)">资金图谱关系</el-button>
+                <el-button type="success" @click="openRelations(activePerson)">关联人</el-button>
+              </div>
+              <button class="relation-map fund-graph-map" type="button" aria-label="点击放大资金关系图谱" @click="openFundGraph(activePerson)">
+                <svg class="fund-graph-svg fund-graph-dynamic fund-graph-preview" :viewBox="fundGraphViewBox" role="img" aria-label="资金关系图谱预览">
+                  <defs>
+                    <marker id="adminFundArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                      <path d="M 0 0 L 10 5 L 0 10 z"></path>
+                    </marker>
+                  </defs>
+                  <g v-for="edge in fundGraphEdges" :key="`preview-${edge.source}-${edge.target}-${edge.rowIndex}`">
+                    <path class="fund-edge" :d="fundEdgePath(edge)" marker-end="url(#adminFundArrow)"></path>
+                  </g>
+                  <g
+                    v-for="node in fundGraphNodes"
+                    :key="`preview-${node.id}`"
+                    class="fund-node fund-graph-node"
+                    :class="['fund-node-layer-' + fundNodeLevelRank(node), { 'fund-node-primary': node.primary }]"
+                    :transform="fundNodeTransform(node)"
+                    @click.stop="openGraphNodeProfile(node)"
+                  >
+                    <rect x="-76" y="-31" width="152" height="62" rx="7"></rect>
+                    <text class="fund-node-name" x="0" y="-11">{{ node.label }}</text>
+                    <text v-if="fundNodeAmount(node)" class="fund-node-amount" x="0" y="5">{{ fundNodeAmount(node) }}</text>
+                    <text class="fund-node-level" x="0" y="21">{{ node.level }}</text>
+                  </g>
+                  <text v-if="!fundGraphEdges.length && !fundRelationLoading" class="fund-empty-text" x="380" y="184">暂无资金关系图谱数据</text>
+                </svg>
+                <span class="fund-zoom-hint">点击放大</span>
+              </button>
+            </aside>
+            <div class="detail-fields">
+              <div v-for="row in detailRows" :key="row.label" class="detail-line" :class="{ 'detail-line-wide': row.wide }">
+                <span class="detail-line-icon">{{ row.icon }}</span>
+                <span class="detail-label">{{ row.label }}：</span>
+                <strong :class="{ highlight: row.highlight, sensitive: row.label.includes('金额') || row.label.includes('投资') }">{{ row.value }}</strong>
+              </div>
+            </div>
+          </div>
+        </section>
+      </el-dialog>
+
+      <el-dialog v-model="relationOpen" title="关联人" width="860px">
+        <section v-if="activePerson">
+          <div class="admin-subhead">
+            <strong>{{ activePerson.name }}</strong>
+            <span>{{ activePerson.idNumber }}</span>
+          </div>
+          <el-table class="admin-relation-table" :data="relationRows" border height="360px">
+            <el-table-column prop="relation" label="关系" width="120"></el-table-column>
+            <el-table-column prop="name" label="姓名" width="130"></el-table-column>
+            <el-table-column prop="idNumber" label="身份证号" min-width="190"></el-table-column>
+            <el-table-column prop="phone" label="联系电话" width="150"></el-table-column>
+            <el-table-column prop="occupation" label="职业/备注" min-width="160" show-overflow-tooltip></el-table-column>
+          </el-table>
+          <p v-if="!relationRows.length" class="admin-empty">暂无关联人数据</p>
+        </section>
+      </el-dialog>
+
+      <el-dialog v-model="photoOpen" :title="photoPreview.title" width="520px">
+        <section class="admin-photo-preview">
+          <div class="admin-photo-frame" :class="`portrait-${activePerson?.avatarIndex % 8 || 0}`">
+            <img v-if="photoPreview.url" :src="photoPreview.url" :alt="photoPreview.title">
+            <span v-else>{{ photoPreview.placeholder }}</span>
+          </div>
+          <strong>{{ photoPreview.name }}</strong>
+          <p>{{ photoPreview.idNumber || '未填写身份证号' }}</p>
+          <el-alert v-if="!photoPreview.url" title="当前人员暂无照片，照片导入后会自动显示。" type="info" :closable="false"></el-alert>
+        </section>
+      </el-dialog>
+
+      <el-dialog v-model="dataImportOpen" title="导入人员 Excel 数据" width="560px">
+        <section class="admin-data-import">
+          <el-upload
+            drag
+            :auto-upload="false"
+            accept=".xlsx,.xls"
+            :limit="1"
+            :on-change="handleDataImportChange"
+            :on-remove="clearDataImport"
+          >
+            <div class="admin-upload-main">
+              <strong>选择 Excel 文件</strong>
+              <span>导入后会用新 Excel 数据更新数据库人员表和字段表。</span>
+            </div>
+          </el-upload>
+          <el-alert title="导入会替换当前后台人员数据，请确认 Excel 字段完整后再提交。" type="warning" :closable="false"></el-alert>
+          <p v-if="dataImportFile">已选择：{{ dataImportFile.name }}</p>
+        </section>
+        <template #footer>
+          <el-button @click="dataImportOpen = false">取消</el-button>
+          <el-button type="primary" :loading="dataImporting" @click="confirmDataImport">确认导入</el-button>
+        </template>
+      </el-dialog>
+
+      <el-dialog v-model="photoImportOpen" title="导入人员照片" width="560px">
+        <section class="admin-photo-import">
+          <el-upload
+            drag
+            :auto-upload="false"
+            accept=".zip,.rar,.7z"
+            :limit="1"
+            :on-change="handlePhotoImportChange"
+            :on-remove="clearPhotoImport"
+          >
+            <div class="admin-upload-main">
+              <strong>选择照片压缩包</strong>
+              <span>支持 .zip / .rar / .7z，建议使用身份证号命名照片文件。</span>
+            </div>
+          </el-upload>
+          <el-alert title="当前原型会从配置的照片目录自动读取照片；接入上传接口后可在这里提交压缩包。" type="info" :closable="false"></el-alert>
+          <p v-if="photoImportFile">已选择：{{ photoImportFile.name }}</p>
+        </section>
+        <template #footer>
+          <el-button @click="photoImportOpen = false">取消</el-button>
+          <el-button type="primary" @click="confirmPhotoImport">确认</el-button>
+        </template>
+      </el-dialog>
+
+      <el-dialog v-model="fundImportOpen" title="导入资金关系 Excel" width="560px">
+        <section class="admin-fund-import">
+          <el-upload
+            drag
+            :auto-upload="false"
+            accept=".xlsx,.xls"
+            :limit="1"
+            :on-change="handleFundImportChange"
+            :on-remove="clearFundImport"
+          >
+            <div class="admin-upload-main">
+              <strong>选择资金关系 Excel 文件</strong>
+              <span>导入后会把资金关联表录入数据库，并在人员资金图谱里展示。</span>
+            </div>
+          </el-upload>
+          <el-alert title="导入会替换当前资金关系数据，请确认表格内容无误后再提交。" type="warning" :closable="false"></el-alert>
+          <p v-if="fundImportFile">已选择：{{ fundImportFile.name }}</p>
+        </section>
+        <template #footer>
+          <el-button @click="fundImportOpen = false">取消</el-button>
+          <el-button type="primary" :loading="fundImporting" @click="confirmFundImport">确认导入</el-button>
+        </template>
+      </el-dialog>
+
+      <el-dialog v-model="fundGraphOpen" class="fund-graph-dialog" width="96vw" top="2vh">
+        <template #header>
+          <div class="fund-dialog-head">
+            <h2>资金关系图谱</h2>
+            <span>{{ activePerson?.name || '人员' }} → 上一层投资资金</span>
+          </div>
+        </template>
+        <div class="fund-graph-large">
+          <svg class="fund-graph-svg fund-graph-dynamic" :viewBox="fundGraphViewBox" role="img" aria-label="资金关系图谱">
+            <defs>
+              <marker id="adminFundArrowLarge" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z"></path>
+              </marker>
+            </defs>
+            <g v-for="edge in fundGraphEdges" :key="`${edge.source}-${edge.target}-${edge.rowIndex}`">
+              <path class="fund-edge" :d="fundEdgePath(edge)" marker-end="url(#adminFundArrowLarge)"></path>
+            </g>
+            <g
+              v-for="node in fundGraphNodes"
+              :key="node.id"
+              class="fund-node fund-graph-node"
+              :class="['fund-node-layer-' + fundNodeLevelRank(node), { 'fund-node-primary': node.primary }]"
+              :transform="fundNodeTransform(node)"
+              @click.stop="openGraphNodeProfile(node)"
+            >
+              <rect x="-76" y="-31" width="152" height="62" rx="7"></rect>
+              <text class="fund-node-name" x="0" y="-11">{{ node.label }}</text>
+              <text v-if="fundNodeAmount(node)" class="fund-node-amount" x="0" y="5">{{ fundNodeAmount(node) }}</text>
+              <text class="fund-node-level" x="0" y="21">{{ node.level }}</text>
+            </g>
+            <text v-if="!fundGraphEdges.length && !fundRelationLoading" class="fund-empty-text" x="380" y="184">暂无资金关系图谱数据</text>
+          </svg>
+        </div>
+        <section class="fund-relation-panel">
+          <header>
+            <strong>{{ activePerson?.name || '人员' }}资金关系明细</strong>
+            <span>共 {{ fundRelationTotal }} 条</span>
+          </header>
+          <el-table class="fund-relation-table" :data="fundRelationRows" border height="260px" v-loading="fundRelationLoading">
+            <el-table-column
+              v-for="header in fundRelationHeaders"
+              :key="header.key"
+              :prop="`fields.${header.key}`"
+              :label="header.label"
+              :width="header.width"
+              show-overflow-tooltip
+            ></el-table-column>
+          </el-table>
+          <p v-if="!fundRelationRows.length && !fundRelationLoading" class="admin-empty">暂无资金关系数据</p>
+        </section>
+      </el-dialog>
+    </div>
+    <script src="/vendor/vue.global.prod.js?v=local-20260608"></script>
+    <script src="/vendor/element-plus.full.min.js?v=local-20260608"></script>
+    <script type="module" src="/src/admin.js?v=single-profile-fund-graph-20260611"></script>
+  </body>
+</html>

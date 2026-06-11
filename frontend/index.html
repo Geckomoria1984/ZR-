@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>黑龙江省群体架构图</title>
+    <link rel="stylesheet" href="/vendor/element-plus.css?v=local-20260608">
+    <link rel="stylesheet" href="/src/styles.css?v=portrait-original-color-20260611">
+  </head>
+  <body>
+    <div id="app" v-cloak>
+      <main class="dashboard-shell">
+        <header class="top-banner">
+          <div class="title-frame" aria-hidden="true"></div>
+          <h1>黑龙江省群体架构图<span>1041人</span></h1>
+          <div class="top-actions">
+            <a class="admin-entry-link" href="admin.html" aria-label="进入后台管理系统">后台管理</a>
+            <el-button class="privacy-toggle" :aria-pressed="privacyMode" @click="togglePrivacy">
+              <span></span>{{ privacyMode ? '隐私开' : '隐私关' }}
+            </el-button>
+            <el-button class="diamond-btn" circle aria-label="定位视图"></el-button>
+          </div>
+        </header>
+
+        <section class="primary-grid" aria-label="重点人员分组">
+          <article
+            v-for="groupKey in primaryGroups"
+            :key="groupKey"
+            class="people-section"
+            :class="groups[groupKey].tone === 'yellow' ? 'people-section-yellow' : 'people-section-red'"
+            :data-section="groupKey"
+          >
+            <div class="section-head">
+              <p class="area-summary">{{ groups[groupKey].summary }}</p>
+              <div class="section-title">
+                <el-button class="title-button open-list" text @click="openDrawer(groupKey)">
+                  {{ groups[groupKey].title }}<span>{{ groups[groupKey].count }}人</span>
+                </el-button>
+                <small>{{ groups[groupKey].subtitle }}</small>
+                <el-button class="view-all-link open-list" size="small" @click="openDrawer(groupKey)">查看全部</el-button>
+              </div>
+              <el-radio-group v-model="sectionFilters[groupKey]" class="legend" @change="resetSectionPage(groupKey)">
+                <el-radio-button label="all">
+                  <i class="dot" :class="groups[groupKey].tone === 'yellow' ? 'dot-cream' : 'dot-red'"></i>全部
+                </el-radio-button>
+                <el-radio-button label="本市">
+                  <i class="dot" :class="groups[groupKey].tone === 'yellow' ? 'dot-cream' : 'dot-red'"></i>本市
+                </el-radio-button>
+                <el-radio-button label="外市">
+                  <i class="dot" :class="groups[groupKey].tone === 'yellow' ? 'dot-yellow' : 'dot-pink'"></i>外市
+                </el-radio-button>
+              </el-radio-group>
+            </div>
+
+            <div class="carousel-shell" :aria-label="`${groups[groupKey].title}轮播`">
+              <el-carousel
+                ref="sectionCarouselRefs"
+                class="people-carousel"
+                arrow="always"
+                indicator-position="outside"
+                :interval="6000"
+                height="176px"
+                @change="setSectionPage(groupKey, $event)"
+              >
+                <el-carousel-item v-for="(page, pageIndex) in sectionPages(groupKey)" :key="`${groupKey}-${pageIndex}`">
+                  <div class="card-row carousel-track">
+                    <button
+                      v-for="person in page"
+                      :key="person.id"
+                      class="person-card"
+                      :class="{ 'person-card-yellow': groups[groupKey].tone === 'yellow' }"
+                      type="button"
+                      @click="openProfile(person)"
+                    >
+                      <span class="portrait" :class="`portrait-${person.avatarIndex % 8}`" :aria-label="`${person.name}照片`">
+                        <img v-if="person.photoUrl" :src="person.photoUrl" :alt="`${person.name}照片`">
+                        <span v-else class="portrait-face">{{ person.name.slice(0, 1) }}</span>
+                      </span>
+                      <span class="person-mini-content">
+                        <strong>{{ person.name }} {{ person.gender }} {{ person.age }}岁</strong>
+                        <span>投资金额:<b class="sensitive">{{ displayInvestmentAmount(person) }}</b></span>
+                        <span>职业:{{ person.occupation }}</span>
+                        <span>突出行为:{{ person.behavior }}</span>
+                        <span>到访次数:{{ person.visits }}次</span>
+                        <span class="police-station-text">
+                          <em>属地单位:</em>
+                          <b>
+                            <i v-for="line in policeStationLines(person.policeStation)" :key="line">{{ line }}</i>
+                          </b>
+                        </span>
+                      </span>
+                    </button>
+                    <p v-if="!page.length" class="empty-state">暂无匹配人员</p>
+                  </div>
+                </el-carousel-item>
+              </el-carousel>
+              <span class="carousel-status">{{ sectionStatus(groupKey) }}</span>
+            </div>
+          </article>
+        </section>
+
+        <section class="category-strip" aria-label="人员分类">
+          <el-button class="category-tile category-blue open-list" @click="openDrawer('general')">
+            <strong>{{ groups.general.title }} <span>{{ groups.general.count }}人</span></strong>
+            <small>有到场行为</small>
+          </el-button>
+          <el-button class="category-tile category-teal open-list" @click="openDrawer('watch')">
+            <strong>{{ groups.watch.title }} <span>{{ groups.watch.count }}人</span></strong>
+            <small>有过极端言论或意见领袖，未到场或仅群内响应</small>
+          </el-button>
+        </section>
+
+        <section class="region-board" aria-label="户籍地统计">
+          <el-button class="pill-button open-list" @click="openDrawer('arrived')">到场非投资人<br><small>户籍地分布</small></el-button>
+          <div class="region-panel">
+            <h2>其他人员 <span>{{ otherPeopleCount }}人</span></h2>
+            <div class="region-chips">
+              <div v-for="(row, rowIndex) in regionRows" :key="`region-row-${rowIndex}`" class="region-chip-row">
+                <el-button
+                  v-for="([name, count]) in row"
+                  :key="name"
+                  class="region-chip"
+                  :class="{ 'region-chip-alt': rowIndex === 1 }"
+                  @click="openDrawerForRegion(name)"
+                >
+                  <strong>{{ name }}</strong><span>{{ count }}人</span>
+                </el-button>
+              </div>
+            </div>
+          </div>
+          <el-button class="pill-button open-list" @click="openDrawer('hidden')">隐名投资人<br><small>户籍地分布</small></el-button>
+        </section>
+
+        <section class="chart-grid" aria-label="统计图表">
+          <article
+            class="chart-card amount-chart-card"
+            role="button"
+            tabindex="0"
+            @click="openAmountStats"
+            @keyup.enter="openAmountStats"
+            @keyup.space.prevent="openAmountStats"
+          >
+            <h3>投资金额比例</h3>
+            <svg class="amount-donut-svg" viewBox="0 0 120 120" role="img" aria-label="投资金额比例" @click="openAmountStats">
+              <path
+                v-for="segment in amountBucketSegments"
+                :key="segment.bucket.key"
+                class="amount-pie-segment"
+                :d="segment.path"
+                :fill="segment.color"
+                @click.stop="openAmountStats"
+              >
+                <title>{{ segment.bucket.label }} {{ segment.bucket.count }}人</title>
+              </path>
+            </svg>
+          </article>
+          <article class="chart-card city-distribution-card">
+            <h3>本市区县分布</h3>
+            <div class="city-distribution-layout">
+              <svg
+                class="district-donut-svg city-distribution-pie"
+                viewBox="0 0 120 120"
+                role="img"
+                aria-label="本市区县分布饼图"
+                @click="handleCityDistrictPieClick"
+              >
+                <path
+                  v-for="segment in cityDistrictSegments"
+                  :key="`district-chart-${segment.bucket.key}`"
+                  class="district-pie-segment"
+                  :d="segment.path"
+                  :fill="segment.color"
+                  @pointerdown.stop="openDrawerForRegion(segment.bucket.label)"
+                  @click.stop="openDrawerForRegion(segment.bucket.label)"
+                  @keyup.enter.space="openDrawerForRegion(segment.bucket.label)"
+                  role="button"
+                  tabindex="0"
+                >
+                  <title>{{ segment.bucket.label }} {{ segment.bucket.count }}人</title>
+                </path>
+              </svg>
+            </div>
+          </article>
+          <article class="chart-card"><h3>省内外地市户籍分布</h3><div class="pie pie-outside" :style="provinceCityPieStyle"></div></article>
+          <article class="chart-card">
+            <h3>风险标签分布比例</h3>
+            <div class="bar-chart">
+              <div v-for="item in riskBars" :key="item.label" class="bar-column">
+                <div><span v-for="(value, index) in item.values" :key="index" :style="{ height: `${value}px` }" :class="`stack-${index}`"></span></div>
+                <small>{{ item.label }}</small>
+              </div>
+            </div>
+          </article>
+          <article class="chart-card"><h3>职业分布</h3><div class="ring-lines"><span></span><span></span><span></span><span></span></div></article>
+          <article class="chart-card"><h3>全省性别分布</h3><div class="pie pie-gender"></div></article>
+          <article class="chart-card"><h3>库列管情况</h3><div class="pie pie-stock"></div></article>
+          <article class="chart-card">
+            <h3>门诊就诊</h3>
+            <div class="radial-bars">
+              <span
+                v-for="(value, index) in clinicBars"
+                :key="index"
+                :style="{ '--angle': `${index * 12}deg`, '--size': `${value}px`, '--bar-color': `hsl(${190 + index * 7} 86% 62%)` }"
+              ></span>
+            </div>
+          </article>
+        </section>
+      </main>
+
+      <el-dialog v-model="amountStatsOpen" class="amount-stats-dialog" width="860px" top="8vh">
+        <template #header>
+          <div class="amount-stats-head">
+            <h2>投资金额比例</h2>
+            <span>仅统计黑龙江省人员，共 {{ amountBucketStatsTotal }} 人</span>
+          </div>
+        </template>
+        <section class="amount-stats-layout">
+          <div class="amount-stats-pie">
+            <svg class="amount-donut-svg amount-dialog-donut" viewBox="0 0 120 120" role="img" aria-label="黑龙江省投资金额比例">
+              <path
+                v-for="segment in amountBucketSegments"
+                :key="`dialog-${segment.bucket.key}`"
+                class="amount-pie-segment"
+                :d="segment.path"
+                :fill="segment.color"
+                @click="openAmountBucket(segment.bucket)"
+              >
+                <title>{{ segment.bucket.label }} {{ segment.bucket.count }}人</title>
+              </path>
+            </svg>
+          </div>
+          <div class="amount-stats-list">
+            <button
+              v-for="bucket in amountBuckets"
+              :key="bucket.key"
+              class="amount-stats-row"
+              type="button"
+              @click="openAmountBucket(bucket)"
+            >
+              <i :style="{ background: bucket.color }"></i>
+              <strong>{{ bucket.label }}</strong>
+              <span>{{ bucket.count }}人</span>
+              <b>{{ amountBucketPercent(bucket) }}</b>
+            </button>
+          </div>
+        </section>
+      </el-dialog>
+
+      <el-dialog v-model="drawerOpen" class="list-dialog-panel" :class="{ 'list-dialog-compact': isCompactGroupDrawer }" width="96vw" top="4vh" :show-close="false">
+        <template #header>
+          <div class="drawer-head">
+            <h2>{{ drawerTitle }} <span>{{ drawerDisplayCount }}人</span></h2>
+            <p>{{ drawerSubtitle }}</p>
+          </div>
+        </template>
+        <div v-if="drawerMode !== 'amount'" class="drawer-toolbar">
+          <el-button type="primary" :disabled="!canExportDrawerPdf" @click="exportDrawerPdf">导出</el-button>
+          <el-radio-group v-model="drawerLocality">
+            <el-radio-button label="all">全部</el-radio-button>
+            <el-radio-button label="本市">本市</el-radio-button>
+            <el-radio-button label="外市">外市</el-radio-button>
+          </el-radio-group>
+          <label>姓名<el-input v-model="drawerQuery" placeholder="请输入姓名" clearable></el-input></label>
+          <label>身份证号<el-input v-model="drawerIdQuery" placeholder="请输入身份证号" clearable></el-input></label>
+        </div>
+        <div v-if="drawerMode !== 'amount'" class="drawer-grid" :class="drawerGridClass" v-loading="regionLoading || groupLoading">
+          <button
+            v-for="person in drawerPeople"
+            :key="person.id"
+            class="person-card"
+            :class="personCardToneClass(drawerTone)"
+            type="button"
+            @click="openProfile(person)"
+          >
+            <span class="portrait" :class="`portrait-${person.avatarIndex % 8}`" :aria-label="`${person.name}照片`">
+              <img v-if="person.photoUrl" :src="person.photoUrl" :alt="`${person.name}照片`">
+              <span v-else class="portrait-face">{{ person.name.slice(0, 1) }}</span>
+            </span>
+            <span class="person-mini-content">
+              <strong>{{ person.name }} {{ person.gender }} {{ person.age }}岁</strong>
+              <span>投资金额:<b class="sensitive">{{ displayInvestmentAmount(person) }}</b></span>
+              <span>职业:{{ person.occupation }}</span>
+              <span>突出行为:{{ person.behavior }}</span>
+              <span>到访次数:{{ person.visits }}次</span>
+              <span class="police-station-text">
+                <em>属地单位:</em>
+                <b>
+                  <i v-for="line in policeStationLines(person.policeStation)" :key="line">{{ line }}</i>
+                </b>
+              </span>
+            </span>
+          </button>
+          <p v-if="!drawerPeople.length" class="empty-state">暂无匹配人员</p>
+        </div>
+        <footer v-if="drawerMode === 'group' && groupTotal > groupSize" class="amount-drawer-pagination">
+          <el-pagination
+            v-model:current-page="groupPage"
+            :page-size="groupSize"
+            :total="groupTotal"
+            layout="prev, pager, next, jumper, total"
+            @current-change="loadGroupPeople"
+          ></el-pagination>
+        </footer>
+        <div v-if="drawerMode === 'amount'" class="amount-drawer-table">
+          <el-table :data="amountBucketRows" border height="58vh" v-loading="amountBucketLoading">
+            <el-table-column
+              v-for="header in amountBucketHeaders"
+              :key="header.key"
+              :prop="`excelFields.${header.key}`"
+              :label="header.label"
+              :width="header.width"
+              :fixed="header.fixed"
+              show-overflow-tooltip
+            ></el-table-column>
+            <el-table-column label="操作" width="100" fixed="right">
+              <template #default="{ row }">
+                <el-button link type="primary" @click="openProfile(row)">详情</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <footer class="amount-drawer-pagination">
+            <span>共 {{ amountBucketTotal }} 条</span>
+            <el-pagination
+              layout="prev, pager, next, sizes"
+              :total="amountBucketTotal"
+              v-model:current-page="amountBucketPage"
+              v-model:page-size="amountBucketSize"
+              @change="loadAmountBucketPeople"
+            ></el-pagination>
+          </footer>
+        </div>
+      </el-dialog>
+
+      <el-dialog v-model="profileOpen" class="profile-dialog detail-dialog" width="98vw" top="1vh" :show-close="false">
+        <section v-if="activePerson" class="person-detail-page" aria-labelledby="profileName">
+          <header class="detail-titlebar">
+            <span></span>
+            <h2>人员详情</h2>
+            <el-button class="detail-close" text @click="profileOpen = false" aria-label="关闭人员详情">×</el-button>
+          </header>
+          <div class="detail-layout">
+            <aside class="detail-sidebar">
+              <h3><span class="detail-icon">♟</span>{{ groups[activePerson.group]?.title || '人员信息' }}{{ groups[activePerson.group]?.count || '' }}人</h3>
+              <div class="detail-photo" :class="`portrait-${activePerson.avatarIndex % 8}`">
+                <img v-if="activePerson.photoUrl" :src="activePerson.photoUrl" :alt="`${activePerson.name}照片`">
+                <span v-else>{{ activePerson.name.slice(0, 1) }}</span>
+              </div>
+              <strong id="profileName">{{ activePerson.name }}</strong>
+              <b>{{ activePerson.age }}岁&nbsp;&nbsp;{{ activePerson.gender }}&nbsp;&nbsp;{{ activePerson.nation || '汉族' }}</b>
+              <p>{{ activePerson.idNumber }}</p>
+              <div class="detail-relation-actions">
+                <el-button type="primary" @click="openFundGraph">资金图谱关系</el-button>
+              </div>
+              <button class="relation-map fund-graph-map" type="button" aria-label="点击放大资金关系图谱" @click="openFundGraph">
+                <svg class="fund-graph-svg fund-graph-dynamic fund-graph-preview" :viewBox="fundGraphViewBox" role="img" aria-label="资金关系图谱预览">
+                  <defs>
+                    <marker id="fundArrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                      <path d="M 0 0 L 10 5 L 0 10 z"></path>
+                    </marker>
+                  </defs>
+                  <g v-for="edge in fundGraphEdges" :key="`preview-${edge.source}-${edge.target}-${edge.rowIndex}`">
+                    <path class="fund-edge" :d="fundEdgePath(edge)" marker-end="url(#fundArrow)"></path>
+                  </g>
+                  <g
+                    v-for="node in fundGraphNodes"
+                    :key="`preview-${node.id}`"
+                    class="fund-node fund-graph-node"
+                    :class="['fund-node-layer-' + fundNodeLevelRank(node), { 'fund-node-primary': node.primary }]"
+                    :transform="fundNodeTransform(node)"
+                    @click.stop="openGraphNodeProfile(node)"
+                  >
+                    <rect x="-76" y="-31" width="152" height="62" rx="7"></rect>
+                    <text class="fund-node-name" x="0" y="-11">{{ node.label }}</text>
+                    <text v-if="fundNodeAmount(node)" class="fund-node-amount" x="0" y="5">{{ fundNodeAmount(node) }}</text>
+                    <text class="fund-node-level" x="0" y="21">{{ node.level }}</text>
+                  </g>
+                  <text v-if="!fundGraphEdges.length && !fundRelationLoading" class="fund-empty-text" x="380" y="184">暂无资金关系图谱数据</text>
+                  <text v-if="fundRelationLoading" class="fund-empty-text" x="380" y="184">资金图谱加载中</text>
+                </svg>
+                <span class="fund-zoom-hint">点击放大</span>
+              </button>
+            </aside>
+            <div class="detail-fields">
+              <div v-for="row in detailRows" :key="row.label" class="detail-line" :class="{ 'detail-line-wide': row.wide }">
+                <span class="detail-line-icon">{{ row.icon }}</span>
+                <span class="detail-label">{{ row.label }}：</span>
+                <strong :class="{ highlight: row.highlight, sensitive: row.label.includes('金额') || row.label.includes('投资') }">{{ row.value }}</strong>
+              </div>
+            </div>
+          </div>
+        </section>
+      </el-dialog>
+
+      <el-dialog v-model="fundGraphOpen" class="fund-graph-dialog" width="96vw" top="2vh">
+        <template #header>
+          <div class="fund-dialog-head">
+            <h2>资金关系图谱</h2>
+            <span>{{ activePerson?.name || '人员' }} → 上一层投资资金</span>
+          </div>
+        </template>
+        <div class="fund-graph-large">
+          <svg class="fund-graph-svg fund-graph-dynamic" :viewBox="fundGraphViewBox" role="img" aria-label="放大的资金关系图谱">
+            <defs>
+              <marker id="fundArrowLarge" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z"></path>
+              </marker>
+            </defs>
+            <g v-for="edge in fundGraphEdges" :key="`${edge.source}-${edge.target}-${edge.rowIndex}`">
+              <path class="fund-edge" :d="fundEdgePath(edge)" marker-end="url(#fundArrowLarge)"></path>
+            </g>
+            <g
+              v-for="node in fundGraphNodes"
+              :key="node.id"
+              class="fund-node fund-graph-node"
+              :class="['fund-node-layer-' + fundNodeLevelRank(node), { 'fund-node-primary': node.primary }]"
+              :transform="fundNodeTransform(node)"
+              @click.stop="openGraphNodeProfile(node)"
+            >
+              <rect x="-76" y="-31" width="152" height="62" rx="7"></rect>
+              <text class="fund-node-name" x="0" y="-11">{{ node.label }}</text>
+              <text v-if="fundNodeAmount(node)" class="fund-node-amount" x="0" y="5">{{ fundNodeAmount(node) }}</text>
+              <text class="fund-node-level" x="0" y="21">{{ node.level }}</text>
+            </g>
+            <text v-if="!fundGraphEdges.length && !fundRelationLoading" class="fund-empty-text" x="380" y="184">暂无资金关系图谱数据</text>
+            <text v-if="fundRelationLoading" class="fund-empty-text" x="380" y="184">资金图谱加载中</text>
+          </svg>
+        </div>
+      </el-dialog>
+    </div>
+
+    <script src="/vendor/vue.global.prod.js?v=local-20260608"></script>
+    <script src="/vendor/element-plus.full.min.js?v=local-20260608"></script>
+    <script type="module" src="/src/app.js?v=portrait-original-color-20260611"></script>
+  </body>
+</html>
