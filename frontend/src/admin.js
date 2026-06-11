@@ -9,6 +9,33 @@ import { apiUrl, normalizeApiPerson } from './api.js';
 
 const { createApp } = window.Vue;
 
+const excelStoreImportConfigs = {
+  relatedPeople: {
+    title: '导入关联人 Excel',
+    fileLabel: '选择关联人 Excel 文件',
+    label: '关联人',
+    endpoint: '/api/admin/imports/related-people/import-excel',
+    hint: '导入后会把关联人 Excel 原始字段录入独立数据库表。',
+    warning: '导入会替换当前关联人导入库数据，请确认表格内容无误后再提交。',
+  },
+  hiddenInvestors: {
+    title: '导入隐名投资人 Excel',
+    fileLabel: '选择隐名投资人 Excel 文件',
+    label: '隐名投资人',
+    endpoint: '/api/admin/imports/hidden-investors/import-excel',
+    hint: '导入后会把隐名投资人 Excel 原始字段录入独立数据库表。',
+    warning: '导入会替换当前隐名投资人导入库数据，请确认表格内容无误后再提交。',
+  },
+  addedPeople: {
+    title: '导入增加人员 Excel',
+    fileLabel: '选择增加人员 Excel 文件',
+    label: '增加人员',
+    endpoint: '/api/admin/imports/added-people/import-excel',
+    hint: '导入后会把增加人员 Excel 原始字段录入独立数据库表。',
+    warning: '导入会替换当前增加人员导入库数据，请确认表格内容无误后再提交。',
+  },
+};
+
 const emptyForm = () => ({
   task: '人员架构',
   name: '',
@@ -57,6 +84,10 @@ createApp({
       dataImportOpen: false,
       dataImportFile: null,
       dataImporting: false,
+      excelStoreImportOpen: false,
+      excelStoreImportFile: null,
+      excelStoreImporting: false,
+      excelStoreImportType: 'relatedPeople',
       fundImportOpen: false,
       fundImportFile: null,
       fundImporting: false,
@@ -86,6 +117,9 @@ createApp({
     },
     tableColumns() {
       return this.columns;
+    },
+    excelStoreImportConfig() {
+      return excelStoreImportConfigs[this.excelStoreImportType] || excelStoreImportConfigs.relatedPeople;
     },
     fundGraphViewBox() {
       const graph = this.fundRelationGraph || {};
@@ -283,6 +317,42 @@ createApp({
         this.loadPeople();
       } finally {
         this.dataImporting = false;
+      }
+    },
+    openExcelStoreImport(type) {
+      this.excelStoreImportType = type;
+      this.excelStoreImportFile = null;
+      this.excelStoreImportOpen = true;
+    },
+    handleExcelStoreImportChange(file) {
+      this.excelStoreImportFile = file?.raw || file || null;
+    },
+    clearExcelStoreImport() {
+      this.excelStoreImportFile = null;
+    },
+    async confirmExcelStoreImport() {
+      const config = this.excelStoreImportConfig;
+      if (!this.excelStoreImportFile) {
+        window.ElementPlus.ElMessage.info(`请选择${config.label} Excel 文件`);
+        return;
+      }
+      const body = new FormData();
+      body.append('file', this.excelStoreImportFile);
+      this.excelStoreImporting = true;
+      try {
+        const response = await fetch(apiUrl(config.endpoint), {
+          method: 'POST',
+          body,
+        });
+        if (!response.ok) {
+          window.ElementPlus.ElMessage.error(`${config.label}导入失败`);
+          return;
+        }
+        const result = await response.json();
+        window.ElementPlus.ElMessage.success(`导入成功，更新 ${result.imported || 0} 条${config.label}数据`);
+        this.excelStoreImportOpen = false;
+      } finally {
+        this.excelStoreImporting = false;
       }
     },
     openFundImport() {

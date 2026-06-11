@@ -158,6 +158,22 @@ describe('dashboard data contract', () => {
     assert.match(html, />后台管理</);
   });
 
+  it('links visible homepage into the hidden investor dashboard scope', () => {
+    const html = readFileSync(new URL('../frontend/index.html', import.meta.url), 'utf8');
+    const script = readFileSync(new URL('../frontend/src/app.js', import.meta.url), 'utf8');
+
+    assert.match(html, /goHiddenDashboard/);
+    assert.match(html, /进入隐名首页/);
+    assert.match(html, /返回显名首页/);
+    assert.match(html, /dashboardTitle/);
+    assert.match(script, /dashboardScope/);
+    assert.match(script, /scope=hidden/);
+    assert.match(script, /\/api\/dashboard\/hidden-investors/);
+    assert.match(script, /\/api\/dashboard\/hidden-investors\/people/);
+    assert.match(script, /localDashboardPeople/);
+    assert.match(script, /personMatchesAmountBucket/);
+  });
+
   it('renders clickable investment amount buckets as a table drawer', () => {
     for (const { html, script } of homeArtifacts()) {
       assert.match(html, /<svg[^>]*class="amount-donut-svg"/);

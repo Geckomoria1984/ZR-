@@ -23,16 +23,18 @@ public class AdminPeopleService {
     this.dashboardService = dashboardService;
   }
 
-  public synchronized Map<String, Object> list(String name, String idNumber, String gender, String risk, String amountBucket, String locality, String province, String region, Integer age, int page, int size) {
+  public synchronized Map<String, Object> list(String name, String idNumber, String gender, String risk, String amountBucket, String locality, String province, String residenceProvince, String region, boolean excludeLevelGroups, Integer age, int page, int size) {
     initialize();
     List<Map<String, Object>> filtered = people.values().stream()
         .filter(person -> contains(person.get("name"), name))
         .filter(person -> contains(person.get("idNumber"), idNumber))
         .filter(person -> gender == null || gender.isBlank() || gender.equals(person.get("gender")))
         .filter(person -> risk == null || risk.isBlank() || risk.equals(person.get("risk")))
+        .filter(person -> !excludeLevelGroups || !isVisibleLevelGroup(person))
         .filter(person -> matchesAmountBucket(person, amountBucket))
         .filter(person -> locality == null || locality.isBlank() || locality.equals(person.get("locality")))
         .filter(person -> province == null || province.isBlank() || !"本省".equals(province) || isHeilongjiangPerson(person))
+        .filter(person -> matchesResidenceProvince(person, residenceProvince))
         .filter(person -> matchesRegion(person, region))
         .filter(person -> age == null || age.equals(toInt(person.get("age"))))
         .sorted(Comparator.comparing(person -> String.valueOf(person.getOrDefault("id", ""))))
@@ -232,6 +234,19 @@ public class AdminPeopleService {
     if (region == null || region.isBlank()) return true;
     String normalizedRegion = region.trim();
     return normalizedRegion.equals(String.valueOf(person.getOrDefault("district", "")).trim());
+  }
+
+  private boolean matchesResidenceProvince(Map<String, Object> person, String province) {
+    if (province == null || province.isBlank()) return true;
+    String normalized = province.trim();
+    return String.valueOf(person.getOrDefault("householdProvince", "")).contains(normalized)
+        || String.valueOf(person.getOrDefault("address", "")).contains(normalized)
+        || String.valueOf(person.getOrDefault("currentAddress", "")).contains(normalized);
+  }
+
+  private boolean isVisibleLevelGroup(Map<String, Object> person) {
+    String group = String.valueOf(person.getOrDefault("group", ""));
+    return List.of("organizers", "responders", "general", "watch").contains(group);
   }
 
   private double toDouble(Object value) {

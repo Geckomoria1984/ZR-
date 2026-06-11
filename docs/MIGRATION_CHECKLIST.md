@@ -81,6 +81,7 @@ http://localhost:5174/index.html
 ## 最近已保存的重要修改
 
 - 后台资金关系支持导入 Excel 入库。
+- 后台支持导入关联人、隐名投资人、增加人员 Excel；三类数据分别落入独立数据库表：`dashboard_import_related_person`、`dashboard_import_hidden_investor`、`dashboard_import_added_person`，对应字段表为同名加 `_column`。
 - 资金图谱关系从数据库读取资金关系表生成。
 - 资金图谱只显示当前个人身份证号对应的显名投资人。
 - 资金图谱不再显示其他显名投资人。

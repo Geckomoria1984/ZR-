@@ -14,6 +14,9 @@
         <div class="admin-actions">
           <el-button type="primary" @click="openCreate">新增人员</el-button>
           <el-button @click="openDataImport">导入数据</el-button>
+          <el-button @click="openExcelStoreImport('relatedPeople')">导入关联人</el-button>
+          <el-button @click="openExcelStoreImport('hiddenInvestors')">导入隐名投资人</el-button>
+          <el-button @click="openExcelStoreImport('addedPeople')">导入增加人员</el-button>
           <el-button @click="openFundImport">导入资金关系</el-button>
           <el-button @click="openPhotoImport">导入照片</el-button>
           <el-button type="primary" @click="goDashboard">数据分析</el-button>
@@ -235,6 +238,30 @@
         </template>
       </el-dialog>
 
+      <el-dialog v-model="excelStoreImportOpen" :title="excelStoreImportConfig.title" width="560px">
+        <section class="admin-data-import">
+          <el-upload
+            drag
+            :auto-upload="false"
+            accept=".xlsx,.xls"
+            :limit="1"
+            :on-change="handleExcelStoreImportChange"
+            :on-remove="clearExcelStoreImport"
+          >
+            <div class="admin-upload-main">
+              <strong>{{ excelStoreImportConfig.fileLabel }}</strong>
+              <span>{{ excelStoreImportConfig.hint }}</span>
+            </div>
+          </el-upload>
+          <el-alert :title="excelStoreImportConfig.warning" type="warning" :closable="false"></el-alert>
+          <p v-if="excelStoreImportFile">已选择：{{ excelStoreImportFile.name }}</p>
+        </section>
+        <template #footer>
+          <el-button @click="excelStoreImportOpen = false">取消</el-button>
+          <el-button type="primary" :loading="excelStoreImporting" @click="confirmExcelStoreImport">确认导入</el-button>
+        </template>
+      </el-dialog>
+
       <el-dialog v-model="fundImportOpen" title="导入资金关系 Excel" width="560px">
         <section class="admin-fund-import">
           <el-upload
@@ -313,6 +340,6 @@
     </div>
     <script src="/vendor/vue.global.prod.js?v=local-20260608"></script>
     <script src="/vendor/element-plus.full.min.js?v=local-20260608"></script>
-    <script type="module" src="/src/admin.js?v=single-profile-fund-graph-20260611"></script>
+    <script type="module" src="/src/admin.js?v=extra-imports-20260611"></script>
   </body>
 </html>

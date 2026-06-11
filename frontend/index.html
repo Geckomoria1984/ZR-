@@ -5,15 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>黑龙江省群体架构图</title>
     <link rel="stylesheet" href="/vendor/element-plus.css?v=local-20260608">
-    <link rel="stylesheet" href="/src/styles.css?v=portrait-original-color-20260611">
+    <link rel="stylesheet" href="/src/styles.css?v=keep-chart-dialog-stack-20260611">
   </head>
   <body>
     <div id="app" v-cloak>
-      <main class="dashboard-shell">
+      <main class="dashboard-shell" :class="{ 'dashboard-shell-hidden': isHiddenScope }">
         <header class="top-banner">
           <div class="title-frame" aria-hidden="true"></div>
-          <h1>黑龙江省群体架构图<span>1041人</span></h1>
+          <h1>{{ dashboardTitle }}<span>{{ dashboardTotal }}人</span></h1>
           <div class="top-actions">
+            <a v-if="isHiddenScope" class="admin-entry-link" href="index.html" aria-label="返回显名首页">显名首页</a>
             <a class="admin-entry-link" href="admin.html" aria-label="进入后台管理系统">后台管理</a>
             <el-button class="privacy-toggle" :aria-pressed="privacyMode" @click="togglePrivacy">
               <span></span>{{ privacyMode ? '隐私开' : '隐私关' }}
@@ -113,14 +114,14 @@
         <section class="region-board" aria-label="户籍地统计">
           <el-button class="pill-button open-list" @click="openDrawer('arrived')">到场非投资人<br><small>户籍地分布</small></el-button>
           <div class="region-panel">
-            <h2>其他人员 <span>{{ otherPeopleCount }}人</span></h2>
-            <div class="region-chips">
+            <h2>{{ isHiddenScope ? `黑龙江省隐名投资人 ${regionTableTotalCount()}人` : `其他人员 ${regionTableTotalCount()}人` }}</h2>
+            <div class="region-chips" :class="{ 'region-chips-table': isHiddenScope }">
               <div v-for="(row, rowIndex) in regionRows" :key="`region-row-${rowIndex}`" class="region-chip-row">
                 <el-button
-                  v-for="([name, count]) in row"
+                  v-for="([name, count]) in displayRegionRow(row)"
                   :key="name"
                   class="region-chip"
-                  :class="{ 'region-chip-alt': rowIndex === 1 }"
+                  :class="{ 'region-chip-alt': rowIndex === 1, 'region-chip-total': isRegionTotalChip(name) }"
                   @click="openDrawerForRegion(name)"
                 >
                   <strong>{{ name }}</strong><span>{{ count }}人</span>
@@ -128,7 +129,10 @@
               </div>
             </div>
           </div>
-          <el-button class="pill-button open-list" @click="openDrawer('hidden')">隐名投资人<br><small>户籍地分布</small></el-button>
+          <el-button class="pill-button open-list" @click="goHiddenDashboard">
+            {{ isHiddenScope ? '显名投资人' : '隐名投资人' }}<br>
+            <small>{{ isHiddenScope ? '返回显名首页' : '进入隐名首页' }}</small>
+          </el-button>
         </section>
 
         <section class="chart-grid" aria-label="统计图表">
@@ -181,15 +185,49 @@
               </svg>
             </div>
           </article>
-          <article class="chart-card"><h3>省内外地市户籍分布</h3><div class="pie pie-outside" :style="provinceCityPieStyle"></div></article>
-          <article class="chart-card">
-            <h3>风险标签分布比例</h3>
-            <div class="bar-chart">
-              <div v-for="item in riskBars" :key="item.label" class="bar-column">
-                <div><span v-for="(value, index) in item.values" :key="index" :style="{ height: `${value}px` }" :class="`stack-${index}`"></span></div>
-                <small>{{ item.label }}</small>
-              </div>
-            </div>
+          <article
+            class="chart-card province-city-card"
+            role="button"
+            tabindex="0"
+            @click="openProvinceCityStats"
+            @keyup.enter="openProvinceCityStats"
+            @keyup.space.prevent="openProvinceCityStats"
+          >
+            <h3>省内外地市户籍分布</h3>
+            <svg class="district-donut-svg province-city-pie" viewBox="0 0 120 120" role="img" aria-label="省内外地市户籍分布饼图">
+              <path
+                v-for="segment in provinceCitySegments"
+                :key="`province-city-chart-${segment.bucket.key}`"
+                class="district-pie-segment"
+                :d="segment.path"
+                :fill="segment.color"
+                @click.stop="openProvinceCityStats"
+              >
+                <title>{{ segment.bucket.label }} {{ segment.bucket.count }}人</title>
+              </path>
+            </svg>
+          </article>
+          <article
+            class="chart-card province-city-card"
+            role="button"
+            tabindex="0"
+            @click="openOutsideProvinceStats"
+            @keyup.enter="openOutsideProvinceStats"
+            @keyup.space.prevent="openOutsideProvinceStats"
+          >
+            <h3>各省人员户籍分布</h3>
+            <svg class="district-donut-svg province-city-pie" viewBox="0 0 120 120" role="img" aria-label="各省人员户籍分布饼图">
+              <path
+                v-for="segment in outsideProvinceSegments"
+                :key="`outside-province-chart-${segment.bucket.key}`"
+                class="district-pie-segment"
+                :d="segment.path"
+                :fill="segment.color"
+                @click.stop="openOutsideProvinceStats"
+              >
+                <title>{{ segment.bucket.label }} {{ segment.bucket.count }}人</title>
+              </path>
+            </svg>
           </article>
           <article class="chart-card"><h3>职业分布</h3><div class="ring-lines"><span></span><span></span><span></span><span></span></div></article>
           <article class="chart-card"><h3>全省性别分布</h3><div class="pie pie-gender"></div></article>
@@ -211,7 +249,7 @@
         <template #header>
           <div class="amount-stats-head">
             <h2>投资金额比例</h2>
-            <span>仅统计黑龙江省人员，共 {{ amountBucketStatsTotal }} 人</span>
+            <span>{{ amountStatsSubtitle }}</span>
           </div>
         </template>
         <section class="amount-stats-layout">
@@ -242,6 +280,108 @@
               <span>{{ bucket.count }}人</span>
               <b>{{ amountBucketPercent(bucket) }}</b>
             </button>
+          </div>
+        </section>
+      </el-dialog>
+
+      <el-dialog v-model="outsideProvinceStatsOpen" class="province-city-dialog" width="96vw" top="2vh">
+        <template #header>
+          <div class="province-city-head">
+            <h2>各省人员户籍分布 <span>{{ outsideProvinceTotal }}人</span></h2>
+            <p>包含黑龙江省，按人数从大到小排列</p>
+          </div>
+        </template>
+        <section class="province-city-layout">
+          <div class="province-city-pie-panel">
+            <svg class="district-donut-svg province-city-dialog-pie" viewBox="0 0 120 120" role="img" aria-label="各省人员户籍分布详情饼图">
+              <path
+                v-for="segment in outsideProvinceSegments"
+                :key="`outside-province-dialog-${segment.bucket.key}`"
+                class="district-pie-segment"
+                :d="segment.path"
+                :fill="segment.color"
+                @click="openOutsideProvinceRegion(segment.bucket.label)"
+              >
+                <title>{{ segment.bucket.label }} {{ segment.bucket.count }}人</title>
+              </path>
+              <g
+                v-for="segment in outsideProvinceSegments"
+                :key="`outside-province-label-${segment.bucket.key}`"
+                class="province-city-slice-label"
+                :transform="outsideProvinceLabelTransform(segment)"
+              >
+                <text text-anchor="middle">
+                  <tspan x="0" dy="-0.25em">{{ segment.bucket.label }}</tspan>
+                  <tspan x="0" dy="1.15em">{{ outsideProvincePercent(segment.bucket) }}</tspan>
+                </text>
+              </g>
+            </svg>
+          </div>
+          <div class="province-city-list outside-province-list">
+            <button
+              v-for="row in outsideProvinceChartRows"
+              :key="row.key"
+              class="province-city-row"
+              type="button"
+              @click="openOutsideProvinceRegion(row.label)"
+            >
+              <i :style="{ background: row.color }"></i>
+              <strong>{{ row.label }}</strong>
+              <span>{{ row.count }}人</span>
+              <b>{{ outsideProvincePercent(row) }}</b>
+            </button>
+            <p v-if="!outsideProvinceChartRows.length" class="empty-state">暂无省份数据</p>
+          </div>
+        </section>
+      </el-dialog>
+
+      <el-dialog v-model="provinceCityStatsOpen" class="province-city-dialog" width="96vw" top="2vh">
+        <template #header>
+          <div class="province-city-head">
+            <h2>省内外地市户籍分布 <span>{{ provinceCityTotal }}人</span></h2>
+            <p>黑龙江省除哈尔滨以外地市，全口径统计，包含四个级别人员</p>
+          </div>
+        </template>
+        <section class="province-city-layout">
+          <div class="province-city-pie-panel">
+            <svg class="district-donut-svg province-city-dialog-pie" viewBox="0 0 120 120" role="img" aria-label="省内外地市户籍分布详情饼图">
+              <path
+                v-for="segment in provinceCitySegments"
+                :key="`province-city-dialog-${segment.bucket.key}`"
+                class="district-pie-segment"
+                :d="segment.path"
+                :fill="segment.color"
+                @click="openProvinceCityRegion(segment.bucket.label)"
+              >
+                <title>{{ segment.bucket.label }} {{ segment.bucket.count }}人</title>
+              </path>
+              <g
+                v-for="segment in provinceCitySegments"
+                :key="`province-city-label-${segment.bucket.key}`"
+                class="province-city-slice-label"
+                :transform="provinceCityLabelTransform(segment)"
+              >
+                <text text-anchor="middle">
+                  <tspan x="0" dy="-0.25em">{{ segment.bucket.label }}</tspan>
+                  <tspan x="0" dy="1.15em">{{ provinceCityPercent(segment.bucket) }}</tspan>
+                </text>
+              </g>
+            </svg>
+          </div>
+          <div class="province-city-list">
+            <button
+              v-for="row in provinceCityRows"
+              :key="row.key"
+              class="province-city-row"
+              type="button"
+              @click="openProvinceCityRegion(row.label)"
+            >
+              <i :style="{ background: row.color }"></i>
+              <strong>{{ row.label }}</strong>
+              <span>{{ row.count }}人</span>
+              <b>{{ provinceCityPercent(row) }}</b>
+            </button>
+            <p v-if="!provinceCityRows.length" class="empty-state">暂无省内外地市数据</p>
           </div>
         </section>
       </el-dialog>
@@ -430,6 +570,6 @@
 
     <script src="/vendor/vue.global.prod.js?v=local-20260608"></script>
     <script src="/vendor/element-plus.full.min.js?v=local-20260608"></script>
-    <script type="module" src="/src/app.js?v=portrait-original-color-20260611"></script>
+    <script type="module" src="/src/app.js?v=keep-chart-dialog-stack-20260611"></script>
   </body>
 </html>

@@ -301,6 +301,94 @@ class AdminPeopleControllerTest {
   }
 
   @Test
+  void importingRelatedHiddenAndAddedPeopleExcelStoresEachTypeInSeparateTables() throws Exception {
+    Map<String, String> imports = Map.of(
+        "/api/admin/imports/related-people/import-excel", "dashboard_import_related_person",
+        "/api/admin/imports/hidden-investors/import-excel", "dashboard_import_hidden_investor",
+        "/api/admin/imports/added-people/import-excel", "dashboard_import_added_person");
+
+    for (Map.Entry<String, String> entry : imports.entrySet()) {
+      ByteArrayResource excel = new ByteArrayResource(simpleImportWorkbook(entry.getValue())) {
+        @Override
+        public String getFilename() {
+          return entry.getValue() + ".xlsx";
+        }
+      };
+      MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+      body.add("file", excel);
+      HttpHeaders headers = new HttpHeaders();
+      headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+      ResponseEntity<Map> imported = rest.postForEntity(
+          "http://localhost:" + port + entry.getKey(),
+          new HttpEntity<>(body, headers),
+          Map.class);
+
+      assertThat(imported.getStatusCode().is2xxSuccessful()).isTrue();
+      assertThat(imported.getBody().get("imported")).isEqualTo(2);
+      assertThat(imported.getBody().get("columns")).isEqualTo(4);
+      assertThat(imported.getBody().get("rowTable")).isEqualTo(entry.getValue());
+      assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + entry.getValue(), Integer.class)).isEqualTo(2);
+      assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM " + entry.getValue() + "_column", Integer.class)).isEqualTo(4);
+    }
+  }
+
+  @Test
+  @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
+  void hiddenInvestorImportFeedsHiddenInvestorDashboard() throws Exception {
+    ByteArrayResource excel = new ByteArrayResource(hiddenInvestorDashboardWorkbook()) {
+      @Override
+      public String getFilename() {
+        return "隐名投资人首页.xlsx";
+      }
+    };
+    MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+    body.add("file", excel);
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+    ResponseEntity<Map> imported = rest.postForEntity(
+        "http://localhost:" + port + "/api/admin/imports/hidden-investors/import-excel",
+        new HttpEntity<>(body, headers),
+        Map.class);
+
+    assertThat(imported.getStatusCode().is2xxSuccessful()).isTrue();
+    assertThat(imported.getBody().get("imported")).isEqualTo(4);
+
+    ResponseEntity<Map> dashboard = rest.getForEntity(
+        "http://localhost:" + port + "/api/dashboard/hidden-investors",
+        Map.class);
+
+    assertThat(dashboard.getStatusCode().is2xxSuccessful()).isTrue();
+    assertThat(dashboard.getBody().get("title")).isEqualTo("隐名投资人架构图");
+    assertThat(((List<Map<String, Object>>) dashboard.getBody().get("people"))).hasSize(4);
+
+    Map<String, Object> groups = (Map<String, Object>) dashboard.getBody().get("groups");
+    assertThat(((Number) ((Map<String, Object>) groups.get("organizers")).get("count")).intValue()).isEqualTo(1);
+    assertThat(((Number) ((Map<String, Object>) groups.get("responders")).get("count")).intValue()).isEqualTo(1);
+    assertThat(((Number) ((Map<String, Object>) groups.get("general")).get("count")).intValue()).isEqualTo(1);
+    assertThat(((Number) ((Map<String, Object>) groups.get("watch")).get("count")).intValue()).isEqualTo(1);
+
+    List<Map<String, Object>> amountBuckets = (List<Map<String, Object>>) dashboard.getBody().get("amountBuckets");
+    Map<String, Object> highAmount = amountBuckets.stream()
+        .filter(bucket -> "gte10000".equals(bucket.get("key")))
+        .findFirst()
+        .orElseThrow();
+    assertThat(((Number) highAmount.get("count")).intValue()).isEqualTo(1);
+
+    List<List<List<Object>>> regionRows = (List<List<List<Object>>>) dashboard.getBody().get("regionRows");
+    assertThat(regionRows.get(0)).contains(List.of("南岗", 1));
+    assertThat(regionRows.get(1)).contains(List.of("齐齐哈尔", 1));
+
+    ResponseEntity<Map> peoplePage = rest.getForEntity(
+        "http://localhost:" + port + "/api/dashboard/hidden-investors/people?group=organizers&page=1&size=10",
+        Map.class);
+    assertThat(peoplePage.getStatusCode().is2xxSuccessful()).isTrue();
+    assertThat(peoplePage.getBody().get("total")).isEqualTo(1);
+    assertThat(((List<Map<String, Object>>) peoplePage.getBody().get("rows")).get(0).get("name")).isEqualTo("隐名一级甲");
+  }
+
+  @Test
   void layeredFundRelationGraphOnlyUsesCurrentVisibleInvestorAndAdjacentLayers() throws Exception {
     String peopleUrl = "http://localhost:" + port + "/api/admin/people";
     ResponseEntity<Map> list = rest.getForEntity(peopleUrl + "?size=2", Map.class);
@@ -504,6 +592,60 @@ class AdminPeopleControllerTest {
       second.createCell(2).setCellValue("中融产品账户");
       second.createCell(3).setCellValue("300000");
       second.createCell(4).setCellValue("无关行");
+      workbook.write(output);
+      return output.toByteArray();
+    }
+  }
+
+  private byte[] simpleImportWorkbook(String namePrefix) throws Exception {
+    try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+      Sheet sheet = workbook.createSheet("Sheet1");
+      Row header = sheet.createRow(0);
+      List<String> columns = List.of("姓名", "身份证号", "联系电话", "备注");
+      for (int index = 0; index < columns.size(); index++) {
+        header.createCell(index).setCellValue(columns.get(index));
+      }
+      Row first = sheet.createRow(1);
+      first.createCell(0).setCellValue(namePrefix + "甲");
+      first.createCell(1).setCellValue("230100198001010011");
+      first.createCell(2).setCellValue("13900000001");
+      first.createCell(3).setCellValue("第一条");
+      Row second = sheet.createRow(2);
+      second.createCell(0).setCellValue(namePrefix + "乙");
+      second.createCell(1).setCellValue("230100198001010022");
+      second.createCell(2).setCellValue("13900000002");
+      second.createCell(3).setCellValue("第二条");
+      workbook.write(output);
+      return output.toByteArray();
+    }
+  }
+
+  private byte[] hiddenInvestorDashboardWorkbook() throws Exception {
+    try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+      Sheet sheet = workbook.createSheet("Sheet1");
+      Row header = sheet.createRow(0);
+      List<String> columns = List.of(
+          "姓名",
+          "身份证号",
+          "风险级别",
+          "省内人员简易户籍",
+          "属地派出所",
+          "持有中融信托产品份额总数");
+      for (int index = 0; index < columns.size(); index++) {
+        header.createCell(index).setCellValue(columns.get(index));
+      }
+      List<List<String>> rows = List.of(
+          List.of("隐名一级甲", "230100198001010101", "一级", "南岗", "南岗测试派出所", "120000000"),
+          List.of("隐名二级乙", "230100198001010102", "二级", "道里", "道里测试派出所", "60000000"),
+          List.of("隐名三级丙", "230200198001010103", "三级", "齐齐哈尔", "齐齐哈尔测试派出所", "4000000"),
+          List.of("隐名四级丁", "230100198001010104", "四级", "香坊", "香坊测试派出所", "1000000"));
+      for (int rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
+        Row row = sheet.createRow(rowIndex + 1);
+        List<String> values = rows.get(rowIndex);
+        for (int columnIndex = 0; columnIndex < values.size(); columnIndex++) {
+          row.createCell(columnIndex).setCellValue(values.get(columnIndex));
+        }
+      }
       workbook.write(output);
       return output.toByteArray();
     }

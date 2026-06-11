@@ -32,11 +32,13 @@ public class AdminPeopleController {
       @RequestParam(defaultValue = "") String amountBucket,
       @RequestParam(defaultValue = "") String locality,
       @RequestParam(defaultValue = "") String province,
+      @RequestParam(defaultValue = "") String residenceProvince,
       @RequestParam(defaultValue = "") String region,
+      @RequestParam(defaultValue = "false") boolean excludeLevelGroups,
       @RequestParam(required = false) Integer age,
       @RequestParam(defaultValue = "1") int page,
       @RequestParam(defaultValue = "20") int size) {
-    return peopleService.list(name, idNumber, gender, risk, amountBucket, locality, province, region, age, page, size);
+    return peopleService.list(name, idNumber, gender, risk, amountBucket, locality, province, residenceProvince, region, excludeLevelGroups, age, page, size);
   }
 
   @GetMapping("/{id}")

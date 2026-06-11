@@ -13,6 +13,8 @@ const AMOUNT_BUCKET_COLORS = ['#ff6e63', '#27d6ed', '#f35cae', '#32d2a3', '#ffd0
 const REGION_CHART_COLORS = ['#6f66cc', '#2fd583', '#ff735f', '#23cbdc', '#ef66b4', '#9be05d', '#ffd05d', '#8a7cff'];
 const printableGroupKeys = ['organizers', 'responders', 'general', 'watch'];
 const compactDrawerGroupKeys = ['general', 'watch'];
+const HIDDEN_DASHBOARD_URL = 'index.html?scope=hidden&v=keep-chart-dialog-stack-20260611';
+const VISIBLE_DASHBOARD_URL = 'index.html?v=keep-chart-dialog-stack-20260611';
 
 export function getPersonById(id) {
   return fallbackPeople.find((person) => person.id === id) || null;
@@ -125,6 +127,16 @@ export function chunkPeople(sourcePeople, pageSize = SECTION_PAGE_SIZE) {
   });
 }
 
+function chunkPeopleNoWrap(sourcePeople, pageSize = SECTION_PAGE_SIZE) {
+  if (!sourcePeople.length) return [[]];
+
+  const pageCount = Math.ceil(sourcePeople.length / pageSize);
+  return Array.from({ length: pageCount }, (_, pageIndex) => {
+    const start = pageIndex * pageSize;
+    return sourcePeople.slice(start, start + pageSize);
+  });
+}
+
 function normalize(value = '') {
   return String(value).trim().toLowerCase();
 }
@@ -149,13 +161,22 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
 
   createApp({
     data() {
+      const initialScope = new URLSearchParams(window.location.search).get('scope') === 'hidden'
+        ? 'hidden'
+        : 'visible';
       return {
+        dashboardScope: initialScope,
+        dashboardTitle: initialScope === 'hidden' ? '隐名投资人架构图' : '黑龙江省群体架构图',
+        dashboardTotal: initialScope === 'hidden' ? 0 : 1041,
         people: fallbackPeople,
         groups: fallbackGroups,
         regionStats: fallbackRegionStats,
         regionRows: fallbackRegionRows,
         riskBars: fallbackRiskBars,
         amountBuckets: [],
+        provinceCityFullRows: [],
+        outsideProvinceRows: [],
+        excelColumns: [],
         clinicBars: fallbackClinicBars,
         primaryGroups: ['organizers', 'responders'],
         sectionFilters: {
@@ -178,11 +199,15 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         groupSize: 1000,
         groupLoading: false,
         selectedRegion: null,
+        selectedOutsideProvince: null,
         regionAmountBucket: null,
+        regionFullScope: false,
         regionPeople: [],
         regionTotal: 0,
         regionLoading: false,
         amountStatsOpen: false,
+        provinceCityStatsOpen: false,
+        outsideProvinceStatsOpen: false,
         selectedAmountBucket: null,
         amountBucketHeaders: [],
         amountBucketRows: [],
@@ -200,6 +225,13 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
       };
     },
     computed: {
+      isHiddenScope() {
+        return this.dashboardScope === 'hidden';
+      },
+      amountStatsSubtitle() {
+        const prefix = this.isHiddenScope ? '隐名投资人' : '仅统计黑龙江省人员';
+        return `${prefix}，共 ${this.amountBucketStatsTotal} 人`;
+      },
       drawerGroupInfo() {
         if (this.drawerMode === 'amount') {
           return {
@@ -290,6 +322,40 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
       cityDistrictSegments() {
         return regionSliceSegments(this.regionRows[0] || []);
       },
+      provinceCityRows() {
+        return (this.provinceCityFullRows.length ? this.provinceCityFullRows : (this.regionRows[1] || []))
+          .filter(([name]) => !this.isRegionTotalChip(name))
+          .map(([name, count], index) => ({
+            key: `${name}-${index}`,
+            label: String(name || '').trim(),
+            count: Number(count || 0),
+            color: REGION_CHART_COLORS[index % REGION_CHART_COLORS.length],
+          }))
+          .filter((row) => row.label && row.count > 0);
+      },
+      provinceCityTotal() {
+        return this.provinceCityRows.reduce((sum, row) => sum + Number(row.count || 0), 0);
+      },
+      provinceCitySegments() {
+        return regionSliceSegments(this.provinceCityRows.map((row) => [row.label, row.count]));
+      },
+      outsideProvinceChartRows() {
+        return (this.outsideProvinceRows || [])
+          .filter(([name]) => !this.isRegionTotalChip(name))
+          .map(([name, count], index) => ({
+            key: `${name}-${index}`,
+            label: String(name || '').trim(),
+            count: Number(count || 0),
+            color: REGION_CHART_COLORS[index % REGION_CHART_COLORS.length],
+          }))
+          .filter((row) => row.label && row.count > 0);
+      },
+      outsideProvinceTotal() {
+        return this.outsideProvinceChartRows.reduce((sum, row) => sum + Number(row.count || 0), 0);
+      },
+      outsideProvinceSegments() {
+        return regionSliceSegments(this.outsideProvinceChartRows.map((row) => [row.label, row.count]));
+      },
       cityPieStyle() {
         return regionPieStyle(this.regionRows[0] || []);
       },
@@ -335,16 +401,24 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
       displayInvestmentAmount,
       async loadDashboard() {
         try {
-          const response = await fetch(apiUrl('/api/dashboard'), { cache: 'no-store' });
+          const endpoint = this.isHiddenScope ? '/api/dashboard/hidden-investors' : '/api/dashboard';
+          const response = await fetch(apiUrl(endpoint), { cache: 'no-store' });
           if (!response.ok) return;
 
           const payload = await response.json();
           this.people = (payload.people || this.people).map(normalizeApiPerson);
+          this.dashboardTitle = payload.title || this.dashboardTitle;
+          document.title = this.dashboardTitle;
+          const sourceTotal = Number(payload.source?.riskPeople ?? payload.source?.totalRows ?? payload.total ?? 0);
+          this.dashboardTotal = sourceTotal || this.people.length || this.dashboardTotal;
           this.groups = payload.groups || this.groups;
           this.regionStats = payload.regionStats || this.regionStats;
           this.regionRows = payload.regionRows || this.regionRows;
+          this.provinceCityFullRows = payload.provinceCityFullRows || [];
+          this.outsideProvinceRows = payload.outsideProvinceRows || [];
           this.riskBars = payload.riskBars || this.riskBars;
           this.amountBuckets = normalizeAmountBuckets(payload.amountBuckets || []);
+          this.excelColumns = payload.excelColumns || [];
           this.clinicBars = payload.clinicBars || this.clinicBars;
           this.apiLoaded = true;
         } catch {
@@ -358,7 +432,8 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         });
       },
       sectionPages(groupKey) {
-        return chunkPeople(this.sectionPeople(groupKey));
+        const rows = this.sectionPeople(groupKey);
+        return this.isHiddenScope ? chunkPeopleNoWrap(rows) : chunkPeople(rows);
       },
       sectionStatus(groupKey) {
         const filtered = this.sectionPeople(groupKey);
@@ -399,6 +474,22 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         if (this.drawerMode !== 'group') return;
         this.groupLoading = true;
         try {
+          if (this.isHiddenScope) {
+            const params = new URLSearchParams({
+              page: String(this.groupPage),
+              size: String(this.groupSize),
+              group: this.drawerGroup,
+            });
+            if (this.drawerLocality !== 'all') params.set('locality', this.drawerLocality);
+            if (this.drawerQuery) params.set('name', this.drawerQuery);
+            if (this.drawerIdQuery) params.set('idNumber', this.drawerIdQuery);
+            const response = await fetch(apiUrl(`/api/dashboard/hidden-investors/people?${params.toString()}`), { cache: 'no-store' });
+            if (!response.ok) return;
+            const payload = await response.json();
+            this.groupPeople = (payload.rows || []).map(normalizeApiPerson);
+            this.groupTotal = payload.total || 0;
+            return;
+          }
           const params = new URLSearchParams({
             page: String(this.groupPage),
             size: String(this.groupSize),
@@ -422,7 +513,7 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         this.groupPage = 1;
         this.loadGroupPeople();
       },
-      openDrawerForRegion(region, amountBucket = '') {
+      openDrawerForRegion(region, amountBucket = '', options = {}) {
         if (!region) return;
         this.drawerMode = 'region';
         this.drawerGroup = 'all';
@@ -430,13 +521,34 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         this.drawerQuery = '';
         this.drawerIdQuery = '';
         this.selectedRegion = region;
+        this.selectedOutsideProvince = null;
         this.regionAmountBucket = amountBucket && typeof amountBucket === 'object' && 'key' in amountBucket
           ? amountBucket
           : null;
+        this.regionFullScope = options.fullScope === true;
         this.regionPeople = [];
         this.regionTotal = 0;
         this.drawerOpen = true;
         this.loadRegionPeople(region, amountBucket);
+      },
+      openProvinceCityRegion(region) {
+        this.openDrawerForRegion(region, '', { fullScope: true });
+      },
+      openOutsideProvinceRegion(province) {
+        if (!province) return;
+        this.drawerMode = 'region';
+        this.drawerGroup = 'all';
+        this.drawerLocality = 'all';
+        this.drawerQuery = '';
+        this.drawerIdQuery = '';
+        this.selectedRegion = province;
+        this.selectedOutsideProvince = province;
+        this.regionAmountBucket = null;
+        this.regionFullScope = true;
+        this.regionPeople = [];
+        this.regionTotal = 0;
+        this.drawerOpen = true;
+        this.loadRegionPeople(province);
       },
       handleCityDistrictPieClick(event) {
         const segment = this.findCityDistrictSegmentByPoint(event);
@@ -470,12 +582,30 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         if (!region) return;
         this.regionLoading = true;
         try {
+          if (this.isHiddenScope) {
+            const params = new URLSearchParams({
+              page: '1',
+              size: '1000',
+            });
+            if (this.selectedOutsideProvince) params.set('province', this.selectedOutsideProvince);
+            else params.set('region', region);
+            if (!this.regionFullScope && !this.selectedOutsideProvince) params.set('group', 'hidden');
+            if (amountBucket?.key) params.set('amountBucket', amountBucket.key);
+            const response = await fetch(apiUrl(`/api/dashboard/hidden-investors/people?${params.toString()}`), { cache: 'no-store' });
+            if (!response.ok) return;
+            const payload = await response.json();
+            this.regionPeople = (payload.rows || []).map(normalizeApiPerson);
+            this.regionTotal = payload.total || this.regionPeople.length;
+            return;
+          }
           const params = new URLSearchParams({
-            region,
             ...(amountBucket?.key ? { amountBucket: amountBucket.key } : {}),
+            excludeLevelGroups: String(!this.regionFullScope),
             page: '1',
             size: '1000',
           });
+          if (this.selectedOutsideProvince) params.set('residenceProvince', this.selectedOutsideProvince);
+          else params.set('region', region);
           const response = await fetch(apiUrl(`/api/admin/people?${params.toString()}`), { cache: 'no-store' });
           if (!response.ok) return;
           const payload = await response.json();
@@ -500,6 +630,34 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
       openAmountStats() {
         this.amountStatsOpen = true;
       },
+      openProvinceCityStats() {
+        this.provinceCityStatsOpen = true;
+      },
+      openOutsideProvinceStats() {
+        this.outsideProvinceStatsOpen = true;
+      },
+      provinceCityPercent(row) {
+        const total = this.provinceCityTotal || 0;
+        if (!total) return '0%';
+        const value = (Number(row?.count || 0) / total) * 100;
+        return `${value >= 10 ? value.toFixed(1) : value.toFixed(2)}%`;
+      },
+      provinceCityLabelTransform(segment) {
+        const midAngle = ((Number(segment.startAngle || 0) + Number(segment.endAngle || 0)) / 2 - 90) * Math.PI / 180;
+        const radius = 66;
+        const x = 60 + Math.cos(midAngle) * radius;
+        const y = 60 + Math.sin(midAngle) * radius;
+        return `translate(${x.toFixed(2)} ${y.toFixed(2)})`;
+      },
+      outsideProvincePercent(row) {
+        const total = this.outsideProvinceTotal || 0;
+        if (!total) return '0%';
+        const value = (Number(row?.count || 0) / total) * 100;
+        return `${value >= 10 ? value.toFixed(1) : value.toFixed(2)}%`;
+      },
+      outsideProvinceLabelTransform(segment) {
+        return this.provinceCityLabelTransform(segment);
+      },
       amountBucketPercent(bucket) {
         const total = this.amountBucketStatsTotal || 0;
         if (!total) return '0%';
@@ -508,8 +666,22 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
       async loadAmountBucketPeople() {
         if (!this.selectedAmountBucket) return;
         this.amountBucketLoading = true;
-        const params = `amountBucket=${encodeURIComponent(this.selectedAmountBucket.key)}&province=本省&page=${this.amountBucketPage}&size=${this.amountBucketSize}`;
         try {
+          if (this.isHiddenScope) {
+            const params = new URLSearchParams({
+              amountBucket: this.selectedAmountBucket.key,
+              page: String(this.amountBucketPage),
+              size: String(this.amountBucketSize),
+            });
+            const response = await fetch(apiUrl(`/api/dashboard/hidden-investors/people?${params.toString()}`), { cache: 'no-store' });
+            if (!response.ok) return;
+            const payload = await response.json();
+            this.amountBucketHeaders = payload.headers || this.excelColumns;
+            this.amountBucketRows = (payload.rows || []).map(normalizeApiPerson);
+            this.amountBucketTotal = payload.total || 0;
+            return;
+          }
+          const params = `amountBucket=${encodeURIComponent(this.selectedAmountBucket.key)}&province=本省&page=${this.amountBucketPage}&size=${this.amountBucketSize}`;
           const response = await fetch(apiUrl(`/api/admin/people?${params.toString()}`), { cache: 'no-store' });
           if (!response.ok) return;
           const payload = await response.json();
@@ -544,6 +716,24 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
       },
       async drawerPrintPeople() {
         if (this.drawerMode !== 'group') return this.drawerPeople;
+        if (this.isHiddenScope) {
+          const params = new URLSearchParams({
+            page: '1',
+            size: String(Math.max(this.groupTotal, this.groupSize, 1)),
+            group: this.drawerGroup,
+          });
+          if (this.drawerLocality !== 'all') params.set('locality', this.drawerLocality);
+          if (this.drawerQuery) params.set('name', this.drawerQuery);
+          if (this.drawerIdQuery) params.set('idNumber', this.drawerIdQuery);
+          try {
+            const response = await fetch(apiUrl(`/api/dashboard/hidden-investors/people?${params.toString()}`), { cache: 'no-store' });
+            if (!response.ok) return this.drawerPeople;
+            const payload = await response.json();
+            return (payload.rows || []).map(normalizeApiPerson);
+          } catch {
+            return this.drawerPeople;
+          }
+        }
         const params = new URLSearchParams({
           page: '1',
           size: String(Math.max(this.groupTotal, this.groupSize, 1)),
@@ -576,6 +766,20 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         await this.openProfile(person);
       },
       async findPersonByGraphIdentity(identity) {
+        if (this.isHiddenScope) {
+          const params = new URLSearchParams({ page: '1', size: '1' });
+          if (identity.idNumber) params.set('idNumber', identity.idNumber);
+          else if (identity.name) params.set('name', identity.name);
+          try {
+            const response = await fetch(apiUrl(`/api/dashboard/hidden-investors/people?${params.toString()}`), { cache: 'no-store' });
+            if (!response.ok) return null;
+            const payload = await response.json();
+            const row = (payload.rows || [])[0];
+            return row ? normalizeApiPerson(row) : null;
+          } catch {
+            return null;
+          }
+        }
         const params = new URLSearchParams({ page: '1', size: '1' });
         if (identity.idNumber) params.set('idNumber', identity.idNumber);
         else if (identity.name) params.set('name', identity.name);
@@ -598,7 +802,23 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
       policeStationLines(value) {
         return policeStationLines(value);
       },
-      printToneClass(tone) {
+      isRegionTotalChip(name) {
+        return String(name || '').includes('合计') || String(name || '') === '总计';
+      },
+      displayRegionRow(row) {
+        if (!Array.isArray(row) || row.length < 2) return row;
+        const detailRows = row.filter(([name]) => !this.isRegionTotalChip(name));
+        const total = detailRows.reduce((sum, item) => sum + Number(item?.[1] || 0), 0);
+        return [['总计', total], ...detailRows];
+    },
+    regionTableTotalCount() {
+      return (this.regionRows || []).reduce((sum, row) => {
+        const displayRow = this.displayRegionRow(row) || [];
+        const total = displayRow.find(([name]) => this.isRegionTotalChip(name));
+        return sum + Number(total?.[1] || 0);
+      }, 0);
+    },
+    printToneClass(tone) {
         if (tone === 'yellow') return 'yellow';
         if (tone === 'blue') return 'blue';
         if (tone === 'teal' || tone === 'green') return 'green';
@@ -659,8 +879,62 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         this.privacyMode = !this.privacyMode;
         document.body.classList.toggle('privacy-mode', this.privacyMode);
       },
+      goHiddenDashboard() {
+        window.location.href = this.isHiddenScope ? VISIBLE_DASHBOARD_URL : HIDDEN_DASHBOARD_URL;
+      },
     },
   }).use(window.ElementPlus).mount('#app');
+}
+
+function localDashboardPeople(sourcePeople, filters = {}) {
+  let rows = [...sourcePeople];
+  if (filters.group && filters.group !== 'all') {
+    rows = filters.group === 'hidden'
+      ? rows
+      : rows.filter((person) => person.group === filters.group);
+  }
+  if (filters.region) {
+    const region = String(filters.region).trim();
+    rows = rows.filter((person) => {
+      return String(person.district || '').includes(region)
+        || String(person.address || '').includes(region)
+        || String(person.currentAddress || '').includes(region);
+    });
+  }
+  if (filters.amountBucket?.key) {
+    rows = rows.filter((person) => personMatchesAmountBucket(person, filters.amountBucket.key));
+  }
+  return filterPeople(rows, {
+    query: filters.query,
+    idQuery: filters.idQuery,
+    locality: filters.locality || 'all',
+  });
+}
+
+function personMatchesAmountBucket(person = {}, bucketKey = '') {
+  const amount = personAmountValue(person);
+  return {
+    gte10000: amount >= 100000000,
+    '5000-10000': amount >= 50000000 && amount < 100000000,
+    '3000-5000': amount >= 30000000 && amount < 50000000,
+    '1000-3000': amount >= 10000000 && amount < 30000000,
+    '500-1000': amount >= 5000000 && amount < 10000000,
+    '300-500': amount >= 3000000 && amount < 5000000,
+    lt300: amount >= 0 && amount < 3000000,
+  }[bucketKey] || false;
+}
+
+function personAmountValue(person = {}) {
+  if (Number.isFinite(Number(person.trustShareAmount))) return Number(person.trustShareAmount);
+  return parseAmountText(person.trustShareText || person.amount || 0);
+}
+
+function parseAmountText(value = '') {
+  const text = String(value).trim().replaceAll(',', '');
+  if (!text) return 0;
+  const multiplier = text.includes('亿') ? 100000000 : text.includes('万') ? 10000 : 1;
+  const numeric = Number(text.replace(/[^\d.-]/g, ''));
+  return Number.isFinite(numeric) ? numeric * multiplier : 0;
 }
 
 function normalizeAmountBuckets(buckets) {

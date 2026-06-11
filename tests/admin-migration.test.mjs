@@ -109,6 +109,9 @@ describe('admin personal photo migration', () => {
     assert.match(html, /@click="openPhoto\(row\)"/);
     assert.match(html, /@click="openPhotoImport"/);
     assert.match(html, /@click="openFundImport"/);
+    assert.match(html, /导入关联人/);
+    assert.match(html, /导入隐名投资人/);
+    assert.match(html, /导入增加人员/);
     assert.match(html, /v-for="column in tableColumns"/);
     assert.match(html, /class="admin-person-detail"/);
     assert.match(html, /class="admin-photo-preview"/);
@@ -148,6 +151,21 @@ describe('admin personal photo migration', () => {
       assert.match(script, /\/api\/admin\/fund-relations\/person\/\$\{(?:row|person)\.id\}/);
       assert.match(script, /fundRelationRows/);
       assert.match(script, /fundRelationGraph/);
+    }
+  });
+
+  it('wires related, hidden investor, and added people imports to backend endpoints', () => {
+    for (const { html, script } of adminArtifacts()) {
+      assert.match(html, /@click="openExcelStoreImport\('relatedPeople'\)"/);
+      assert.match(html, /@click="openExcelStoreImport\('hiddenInvestors'\)"/);
+      assert.match(html, /@click="openExcelStoreImport\('addedPeople'\)"/);
+      assert.match(html, /v-model="excelStoreImportOpen"/);
+      assert.match(html, /:title="excelStoreImportConfig\.title"/);
+      assert.match(script, /\/api\/admin\/imports\/related-people\/import-excel/);
+      assert.match(script, /\/api\/admin\/imports\/hidden-investors\/import-excel/);
+      assert.match(script, /\/api\/admin\/imports\/added-people\/import-excel/);
+      assert.match(script, /confirmExcelStoreImport/);
+      assert.match(script, /excelStoreImporting/);
     }
   });
 });

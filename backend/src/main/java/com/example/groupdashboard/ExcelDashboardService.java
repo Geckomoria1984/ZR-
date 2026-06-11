@@ -35,6 +35,12 @@ public class ExcelDashboardService {
   private static final List<String> HEILONGJIANG_CITIES = List.of(
       "齐齐哈尔", "牡丹江", "佳木斯", "大庆", "鸡西", "双鸭山",
       "伊春", "七台河", "鹤岗", "黑河", "绥化", "大兴安岭");
+  private static final List<String> CHINA_PROVINCES = List.of(
+      "北京", "天津", "河北", "山西", "内蒙古", "辽宁", "吉林", "黑龙江",
+      "上海", "江苏", "浙江", "安徽", "福建", "江西", "山东", "河南",
+      "湖北", "湖南", "广东", "广西", "海南", "重庆", "四川", "贵州",
+      "云南", "西藏", "陕西", "甘肃", "青海", "宁夏", "新疆", "台湾",
+      "香港", "澳门");
   private final DashboardProperties properties;
   private final Optional<DashboardDatabaseStore> databaseStore;
   private final AtomicReference<Map<String, Object>> cache = new AtomicReference<>();
@@ -116,6 +122,8 @@ public class ExcelDashboardService {
       List<Map<String, Object>> adminPeople = new ArrayList<>();
       Map<String, Long> harbinRegionCounts = new LinkedHashMap<>();
       Map<String, Long> provinceCityCounts = new LinkedHashMap<>();
+      Map<String, Long> provinceCityFullCounts = new LinkedHashMap<>();
+      Map<String, Long> outsideProvinceCounts = new LinkedHashMap<>();
       Map<String, Integer> groupCounts = new LinkedHashMap<>();
       Map<String, Map<String, Integer>> groupDistrictCounts = new LinkedHashMap<>();
       int blankRows = 0;
@@ -136,35 +144,46 @@ public class ExcelDashboardService {
           group = fallbackGroup(row, headers, formatter);
         }
         String district = dashboardArea(row, headers, formatter);
-        if (isHarbinArea(district)) {
-          harbinRegionCounts.merge(district, 1L, Long::sum);
-        } else if (isHeilongjiangNonHarbinCity(district)) {
-          provinceCityCounts.merge(district, 1L, Long::sum);
-        }
-
         String adminGroup = group;
         Map<String, Object> person = person(row, headers, excelColumns, formatter, personId, adminGroup, district, adminPeople.size());
         adminPeople.add(person);
+        String dashboardProvince = dashboardProvince(row, headers, formatter);
+        if (!dashboardProvince.isBlank()) {
+          outsideProvinceCounts.merge(dashboardProvince, 1L, Long::sum);
+        }
+        if (isHeilongjiangNonHarbinCity(district)) {
+          provinceCityFullCounts.merge(district, 1L, Long::sum);
+        }
+        if (!isVisibleLevelGroup(group)) {
+          if (isHarbinArea(district)) {
+            harbinRegionCounts.merge(district, 1L, Long::sum);
+          } else if (isHeilongjiangNonHarbinCity(district)) {
+            provinceCityCounts.merge(district, 1L, Long::sum);
+          }
+        }
         if (!group.isBlank()) {
           groupCounts.merge(group, 1, Integer::sum);
           groupDistrictCounts.computeIfAbsent(group, ignored -> new LinkedHashMap<>()).merge(district, 1, Integer::sum);
         }
       }
 
-      return Map.of(
-          "groups", groups(groupCounts, groupDistrictCounts),
-          "people", homePeople(adminPeople),
-          "adminPeople", adminPeople,
-          "excelColumns", excelColumnPayload(excelColumns),
-          "regionStats", regionStats(harbinRegionCounts, provinceCityCounts),
-          "regionRows", regionRows(harbinRegionCounts, provinceCityCounts),
-          "riskBars", riskBars(groupCounts),
-          "amountBuckets", amountBuckets(adminPeople.stream().filter(this::isHeilongjiangPerson).toList()),
-          "clinicBars", clinicBars(),
-          "source", Map.of(
-              "excelPath", sourcePath,
-	              "photoDir", properties.photoDir().toString(),
-	              "riskPeople", adminPeople.size()));
+      Map<String, Object> dashboard = new LinkedHashMap<>();
+      dashboard.put("groups", groups(groupCounts, groupDistrictCounts));
+      dashboard.put("people", homePeople(adminPeople));
+      dashboard.put("adminPeople", adminPeople);
+      dashboard.put("excelColumns", excelColumnPayload(excelColumns));
+      dashboard.put("regionStats", regionStats(harbinRegionCounts, provinceCityCounts));
+      dashboard.put("regionRows", regionRows(harbinRegionCounts, provinceCityCounts));
+      dashboard.put("provinceCityFullRows", provinceCityRows(provinceCityFullCounts));
+      dashboard.put("outsideProvinceRows", outsideProvinceRows(outsideProvinceCounts));
+      dashboard.put("riskBars", riskBars(groupCounts));
+      dashboard.put("amountBuckets", amountBuckets(adminPeople.stream().filter(this::isHeilongjiangPerson).toList()));
+      dashboard.put("clinicBars", clinicBars());
+      dashboard.put("source", Map.of(
+          "excelPath", sourcePath,
+          "photoDir", properties.photoDir().toString(),
+          "riskPeople", adminPeople.size()));
+      return dashboard;
   }
 
   private Map<String, Object> normalizeDashboardRegions(Map<String, Object> dashboard) {
@@ -177,6 +196,8 @@ public class ExcelDashboardService {
     Map<String, Integer> groupCounts = new LinkedHashMap<>();
     Map<String, Map<String, Integer>> groupDistrictCounts = new LinkedHashMap<>();
     List<Map<String, Object>> adminPeople = new ArrayList<>();
+    Map<String, Long> provinceCityFullCounts = new LinkedHashMap<>();
+    Map<String, Long> outsideProvinceCounts = new LinkedHashMap<>();
 
     for (Object item : people) {
       if (!(item instanceof Map<?, ?> source)) continue;
@@ -185,6 +206,11 @@ public class ExcelDashboardService {
       String district = dashboardArea(excelFieldByLabel(person, labelByKey, "省内人员简易户籍"));
       person.put("district", district);
       person.put("locality", locality(district));
+      String outsideProvince = outsideProvince(person, labelByKey);
+      if (!outsideProvince.isBlank()) {
+        person.put("householdProvince", outsideProvince);
+        outsideProvinceCounts.merge(outsideProvince, 1L, Long::sum);
+      }
       String normalizedGroup = groupKey(firstNonBlank(
           excelFieldByLabel(person, labelByKey, "风险级别"),
           String.valueOf(person.getOrDefault("risk", ""))));
@@ -194,13 +220,17 @@ public class ExcelDashboardService {
       }
       adminPeople.add(person);
 
-      if (isHarbinArea(district)) {
-        harbinRegionCounts.merge(district, 1L, Long::sum);
-      } else if (isHeilongjiangNonHarbinCity(district)) {
-        provinceCityCounts.merge(district, 1L, Long::sum);
-      }
-
       String group = String.valueOf(person.getOrDefault("group", ""));
+      if (isHeilongjiangNonHarbinCity(district)) {
+        provinceCityFullCounts.merge(district, 1L, Long::sum);
+      }
+      if (!isVisibleLevelGroup(group)) {
+        if (isHarbinArea(district)) {
+          harbinRegionCounts.merge(district, 1L, Long::sum);
+        } else if (isHeilongjiangNonHarbinCity(district)) {
+          provinceCityCounts.merge(district, 1L, Long::sum);
+        }
+      }
       if (!group.isBlank() && !"unclassified".equals(group)) {
         groupCounts.merge(group, 1, Integer::sum);
         groupDistrictCounts.computeIfAbsent(group, ignored -> new LinkedHashMap<>()).merge(district, 1, Integer::sum);
@@ -213,6 +243,8 @@ public class ExcelDashboardService {
     normalized.put("groups", groups(groupCounts, groupDistrictCounts));
     normalized.put("regionStats", regionStats(harbinRegionCounts, provinceCityCounts));
     normalized.put("regionRows", regionRows(harbinRegionCounts, provinceCityCounts));
+    normalized.put("provinceCityFullRows", provinceCityRows(provinceCityFullCounts));
+    normalized.put("outsideProvinceRows", outsideProvinceRows(outsideProvinceCounts));
     normalized.put("riskBars", riskBars(groupCounts));
     normalized.put("amountBuckets", amountBuckets(adminPeople.stream().filter(this::isHeilongjiangPerson).toList()));
     return normalized;
@@ -302,6 +334,7 @@ public class ExcelDashboardService {
     person.put("visits", toInt(firstNonBlank(text(row, headers, "到访次数", formatter), "0")));
     person.put("policeStation", policeStation);
     person.put("district", district);
+    person.put("householdProvince", dashboardProvince(row, headers, formatter));
     person.put("locality", locality(district));
     person.put("group", group);
     person.put("risk", riskLabel(group));
@@ -423,6 +456,27 @@ public class ExcelDashboardService {
     return List.of(harbin, province);
   }
 
+  private List<List<Object>> provinceCityRows(Map<String, Long> provinceCounts) {
+    return provinceCounts.entrySet().stream()
+        .filter(entry -> isHeilongjiangNonHarbinCity(entry.getKey()))
+        .sorted(this::compareRegionCountAsc)
+        .map(entry -> List.of((Object) entry.getKey(), (Object) entry.getValue()))
+        .toList();
+  }
+
+  private List<List<Object>> outsideProvinceRows(Map<String, Long> provinceCounts) {
+    return provinceCounts.entrySet().stream()
+        .filter(entry -> !entry.getKey().isBlank())
+        .sorted(this::compareRegionCountDesc)
+        .map(entry -> List.of((Object) entry.getKey(), (Object) entry.getValue()))
+        .toList();
+  }
+
+  private int compareRegionCountDesc(Map.Entry<String, Long> left, Map.Entry<String, Long> right) {
+    int byCount = Long.compare(right.getValue(), left.getValue());
+    return byCount != 0 ? byCount : left.getKey().compareTo(right.getKey());
+  }
+
   private int compareRegionCountAsc(Map.Entry<String, Long> left, Map.Entry<String, Long> right) {
     int byCount = Long.compare(left.getValue(), right.getValue());
     return byCount != 0 ? byCount : left.getKey().compareTo(right.getKey());
@@ -436,6 +490,58 @@ public class ExcelDashboardService {
   private boolean isHeilongjiangNonHarbinCity(String area) {
     if (area == null || area.isBlank() || "未填写".equals(area) || "总计".equals(area)) return false;
     return !isHarbinArea(area) && HEILONGJIANG_CITIES.stream().anyMatch(area::contains);
+  }
+
+  private String outsideProvince(Row row, Map<String, Integer> headers, DataFormatter formatter) {
+    String province = dashboardProvince(row, headers, formatter);
+    String normalized = normalizeProvince(province);
+    return isKnownProvince(normalized) ? normalized : "";
+  }
+
+  private String outsideProvince(Map<String, Object> person, Map<String, String> labelByKey) {
+    String province = firstNonBlank(
+        String.valueOf(person.getOrDefault("householdProvince", "")),
+        excelFieldByLabel(person, labelByKey, "户籍（省）"),
+        excelFieldByLabel(person, labelByKey, "户籍(省)"),
+        excelFieldByLabel(person, labelByKey, "户籍省"),
+        provinceFromText(excelFieldByLabel(person, labelByKey, "户籍地址")),
+        provinceFromText(excelFieldByLabel(person, labelByKey, "联系地址")),
+        provinceFromText(String.valueOf(person.getOrDefault("address", ""))));
+    String normalized = normalizeProvince(province);
+    return isKnownProvince(normalized) ? normalized : "";
+  }
+
+  private String dashboardProvince(Row row, Map<String, Integer> headers, DataFormatter formatter) {
+    return normalizeProvince(firstNonBlank(
+        text(row, headers, "户籍（省）", formatter),
+        text(row, headers, "户籍(省)", formatter),
+        text(row, headers, "户籍省", formatter),
+        text(row, headers, "省份", formatter),
+        provinceFromText(text(row, headers, "户籍地址", formatter)),
+        provinceFromText(text(row, headers, "联系地址", formatter)),
+        provinceFromText(text(row, headers, "现住址", formatter))));
+  }
+
+  private String provinceFromText(String value) {
+    String text = String.valueOf(value == null ? "" : value).trim();
+    return CHINA_PROVINCES.stream().filter(text::contains).findFirst().orElse("");
+  }
+
+  private String normalizeProvince(String value) {
+    String text = String.valueOf(value == null ? "" : value).trim();
+    String matched = provinceFromText(text);
+    if (!matched.isBlank()) return matched;
+    return text.replace("省", "").replace("市", "").replace("自治区", "").replace("特别行政区", "").trim();
+  }
+
+  private boolean isOutsideProvince(String province) {
+    String normalized = normalizeProvince(province);
+    return !normalized.isBlank() && !"黑龙江".equals(normalized) && !"未填写".equals(normalized);
+  }
+
+  private boolean isKnownProvince(String province) {
+    String normalized = normalizeProvince(province);
+    return !normalized.isBlank() && !"未填写".equals(normalized) && CHINA_PROVINCES.contains(normalized);
   }
 
   private boolean isHeilongjiangPerson(Map<String, Object> person) {
@@ -579,6 +685,10 @@ public class ExcelDashboardService {
         text(row, headers, "隐名投资人", formatter));
     if (!hiddenInvestor.isBlank() && !"无".equals(hiddenInvestor)) return "hidden";
     return "arrived";
+  }
+
+  private boolean isVisibleLevelGroup(String group) {
+    return List.of("organizers", "responders", "general", "watch").contains(group);
   }
 
   private String riskLabel(String group) {
