@@ -1,6 +1,7 @@
 package com.example.groupdashboard;
 
 import java.util.Map;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -19,6 +20,13 @@ public class AdminExcelImportController {
   @PostMapping("/related-people/import-excel")
   public Map<String, Object> importRelatedPeople(@RequestParam("file") MultipartFile file) {
     return importService.importExcel(AdminExcelImportService.ImportType.RELATED_PEOPLE, file);
+  }
+
+  @GetMapping("/related-people/graph")
+  public Map<String, Object> relatedPeopleGraph(
+      @RequestParam(defaultValue = "") String name,
+      @RequestParam(defaultValue = "") String idNumber) {
+    return importService.relatedPeopleGraph(name, idNumber);
   }
 
   @PostMapping("/hidden-investors/import-excel")

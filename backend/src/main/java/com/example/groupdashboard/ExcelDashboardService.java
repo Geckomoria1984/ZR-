@@ -351,7 +351,7 @@ public class ExcelDashboardService {
     person.put("responsiblePerson", nameWithPhone(text(row, headers, "包保派出所领导", formatter), text(row, headers, "包保派出所领导电话", formatter)));
     person.put("policeContact", nameWithPhone(text(row, headers, "包保派出所民警", formatter), text(row, headers, "包保派出所民警电话", formatter)));
     person.put("community", nameWithPhone(text(row, headers, "包保社区干部", formatter), text(row, headers, "包保社区干部电话", formatter)));
-    person.put("latestNote", firstNonBlank(text(row, headers, "就诊情况", formatter), "个人信息字段来自测试 Excel"));
+    person.put("latestNote", firstNonBlank(text(row, headers, "就诊情况", formatter), "未填写"));
     person.put("photoUrl", hasPhoto(personId) ? "/api/photos/" + personId : null);
     Map<String, Object> excelFields = excelFields(row, excelColumns, formatter);
     putExcelField(excelFields, excelColumns, "姓名", name);

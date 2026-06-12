@@ -62,13 +62,13 @@ export function buildDetailRows(person, options = {}) {
     { icon: '▤', label: '车辆信息', value: value('vehicle', '无') },
     { icon: '▤', label: '是否在库', value: value('libraryStatus', `${value('risk')}，${value('otherInvestment', '中植')}投资`), highlight: true },
     { icon: '⚠', label: '公安预警', value: value('policeWarning', '有'), highlight: true },
-    { icon: '⌂', label: '户籍地', value: value('address'), wide: true },
+    { icon: '⌂', label: '户籍地', value: displayResidenceArea(person), wide: true },
     { icon: '⌖', label: '现住址', value: value('currentAddress', value('address')), wide: true },
     { icon: '☷', label: '关联人', value: value('relatedPerson', '未填写'), wide: true },
     { icon: '▦', label: '属地派出所', value: value('policeStation'), wide: true },
     { icon: '▣', label: '民警', value: value('policeContact', '未填写') },
     { icon: '▦', label: '社区', value: value('community', '未填写') },
-    { icon: '▤', label: '就诊情况', value: value('latestNote'), wide: true },
+    { icon: '▤', label: '就诊情况', value: displayMedicalNote(person), wide: true },
   ];
   if (isMeaningfulDetail(person.responsiblePerson)) {
     rows.splice(16, 0, { icon: '☷', label: '包保责任人', value: person.responsiblePerson, wide: true });
@@ -145,6 +145,119 @@ function displayInvestmentAmount(person = {}) {
   return person.trustShareText || person.amount || '0万';
 }
 
+function displayResidenceArea(person = {}) {
+  const fields = person.excelFields || {};
+  const dbValues = [
+    person.householdAddress,
+    person.residenceAddress,
+    person.address,
+    person.currentAddress,
+    ...Object.values(fields),
+  ];
+
+  const districtStreet = dbValues
+    .map((value) => extractDistrictStreetAddress(value))
+    .find(Boolean);
+  if (districtStreet) return districtStreet;
+
+  const directValue = firstDisplayValue(
+    person.householdDistrict,
+    fields['户籍（区）'],
+    fields['户籍(区)'],
+    fields['户籍区'],
+    fields['区县'],
+    fields['区'],
+    fields['区划'],
+    fields['区县名称'],
+  );
+  if (directValue) return directValue;
+
+  const districtEntry = Object.entries(fields).find(([label, value]) => {
+    const key = String(label || '').trim();
+    const text = String(value || '').trim();
+    return key.startsWith('区') && text;
+  });
+  const address = firstDisplayValue(districtEntry?.[1], person.address, '未填写');
+  return prependDistrictIfNeeded(person.district, address);
+}
+
+function firstDisplayValue(...values) {
+  return values.map((value) => String(value ?? '').trim()).find(Boolean) || '';
+}
+
+function extractDistrictStreetAddress(value = '') {
+  const text = String(value || '').trim();
+  if (!text || !text.includes('区')) return '';
+  if (!/[街路道镇乡号]/.test(text)) return '';
+  const match = text.match(/(?:省|市)([^省市]+区.+)$/);
+  if (match?.[1]) return match[1].trim();
+  const districtIndex = text.indexOf('区');
+  const prefix = text.slice(0, districtIndex + 1);
+  const start = Math.max(0, prefix.search(/[\u4e00-\u9fa5]{1,8}区$/));
+  return text.slice(start).trim();
+}
+
+function prependDistrictIfNeeded(district = '', address = '') {
+  const cleanDistrict = String(district || '').trim();
+  const cleanAddress = String(address || '').trim();
+  if (!cleanAddress || cleanAddress === '未填写') return cleanAddress || '未填写';
+  if (!cleanDistrict || cleanDistrict === '未填写' || cleanAddress.includes(cleanDistrict)) return cleanAddress;
+  const harbinDistricts = ['南岗', '道里', '道外', '香坊', '平房', '松北', '呼兰', '阿城', '双城'];
+  if (harbinDistricts.includes(cleanDistrict)) return `${cleanDistrict}区${cleanAddress}`;
+  return cleanAddress;
+}
+
+function displayMedicalNote(person = {}) {
+  const fields = person.excelFields || {};
+  const note = firstDisplayValue(
+    person.latestNote,
+    fields['就诊情况'],
+    fields['就诊信息'],
+    fields['就医情况'],
+    fields['诊疗情况'],
+  );
+  if (!note || isPlaceholderMedicalNote(note)) return '未填写';
+  return formatMedicalNoteLines(note);
+}
+
+function formatMedicalNoteLines(value = '') {
+  return String(value || '')
+    .replace(/\s*(?=\d{4}[-/]\d{1,2}[-/]\d{1,2}\s+\d{1,2}:\d{2})/g, '\n')
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join('\n');
+}
+
+function isPlaceholderMedicalNote(value = '') {
+  const text = String(value || '').trim();
+  return [
+    '个人信息字段来自测试 Excel',
+    '隐名投资人导入数据',
+  ].includes(text);
+}
+
+function maskPersonName(name = '') {
+  const text = String(name || '').trim();
+  if (text.length <= 1) return text;
+  if (text.length === 2) return `${text[0]}*`;
+  return `${text[0]}${'*'.repeat(text.length - 2)}${text[text.length - 1]}`;
+}
+
+function maskIdBirthday(idNumber = '') {
+  const text = String(idNumber || '').trim();
+  if (text.length >= 14) {
+    return `${text.slice(0, 6)}********${text.slice(14)}`;
+  }
+  return text;
+}
+
+function maskPhoneTail(phone = '') {
+  const text = String(phone || '').trim();
+  if (text.length <= 4) return '*'.repeat(text.length);
+  return `${text.slice(0, -4)}****`;
+}
+
 function isMeaningfulDetail(value) {
   const text = String(value ?? '').trim();
   return text !== '' && !['无', '未填写', '0', '0.0', '否', '无相关情况'].includes(text);
@@ -217,8 +330,12 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         amountBucketLoading: false,
         profileOpen: false,
         fundGraphOpen: false,
+        relationGraphOpen: false,
         fundRelationLoading: false,
         fundRelationGraph: { nodes: [], edges: [], width: 760, height: 380 },
+        relatedPersonLoading: false,
+        relatedPersonGraph: { nodes: [], edges: [], width: 760, height: 380 },
+        relatedPersonRows: [],
         activePerson: null,
         privacyMode: false,
         apiLoaded: false,
@@ -322,6 +439,9 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
       cityDistrictSegments() {
         return regionSliceSegments(this.regionRows[0] || []);
       },
+      cityDistrictTotal() {
+        return (this.regionRows[0] || []).reduce((sum, row) => sum + Number(row?.[1] || 0), 0);
+      },
       provinceCityRows() {
         return (this.provinceCityFullRows.length ? this.provinceCityFullRows : (this.regionRows[1] || []))
           .filter(([name]) => !this.isRegionTotalChip(name))
@@ -377,6 +497,19 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
       },
       fundGraphEdges() {
         return this.fundRelationGraph?.edges || [];
+      },
+      relationGraphViewBox() {
+        const graph = this.relatedPersonGraph || {};
+        const nodes = graph.nodes || [];
+        const maxX = nodes.reduce((value, node) => Math.max(value, Number(node.x || 0) + 90), Number(graph.width || 760));
+        const maxY = nodes.reduce((value, node) => Math.max(value, Number(node.y || 0) + 70), Number(graph.height || 380));
+        return `0 0 ${Math.max(760, maxX)} ${Math.max(380, maxY)}`;
+      },
+      relationGraphNodes() {
+        return this.relatedPersonGraph?.nodes || [];
+      },
+      relationGraphEdges() {
+        return this.relatedPersonGraph?.edges || [];
       },
       hasFundHiddenInvestor() {
         return this.fundGraphEdges.length > 0
@@ -643,7 +776,7 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         return `${value >= 10 ? value.toFixed(1) : value.toFixed(2)}%`;
       },
       provinceCityLabelTransform(segment) {
-        const midAngle = ((Number(segment.startAngle || 0) + Number(segment.endAngle || 0)) / 2 - 90) * Math.PI / 180;
+        const midAngle = ((Number(segment.labelAngle ?? segment.startAngle ?? 0) - 90) * Math.PI) / 180;
         const radius = 66;
         const x = 60 + Math.cos(midAngle) * radius;
         const y = 60 + Math.sin(midAngle) * radius;
@@ -756,7 +889,11 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         this.activePerson = person;
         this.profileOpen = true;
         this.fundGraphOpen = false;
-        await this.loadFundRelations(person);
+        this.relationGraphOpen = false;
+        await Promise.all([
+          this.loadFundRelations(person),
+          this.loadRelatedPeople(person),
+        ]);
       },
       async openGraphNodeProfile(node) {
         const identity = graphNodeIdentity(node);
@@ -858,6 +995,43 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         this.fundGraphOpen = true;
         if (!this.fundGraphEdges.length) await this.loadFundRelations();
       },
+      async loadRelatedPeople(person = this.activePerson) {
+        if (!person) {
+          this.relatedPersonGraph = { nodes: [], edges: [], width: 760, height: 380 };
+          this.relatedPersonRows = [];
+          return;
+        }
+        this.relatedPersonLoading = true;
+        try {
+          const params = new URLSearchParams();
+          if (person.name) params.set('name', person.name);
+          if (person.idNumber) params.set('idNumber', person.idNumber);
+          const response = await fetch(apiUrl(`/api/admin/imports/related-people/graph?${params.toString()}`), { cache: 'no-store' });
+          if (!response.ok) {
+            this.relatedPersonGraph = { nodes: [], edges: [], width: 760, height: 380 };
+            this.relatedPersonRows = [];
+            return;
+          }
+          const payload = await response.json();
+          this.relatedPersonGraph = payload.graph || { nodes: [], edges: [], width: 760, height: 380 };
+          this.relatedPersonRows = payload.rows || [];
+          if (this.activePerson?.id === person.id && (payload.summary || []).length) {
+            this.activePerson = {
+              ...this.activePerson,
+              relatedPerson: payload.summary.join('\n'),
+            };
+          }
+        } catch {
+          this.relatedPersonGraph = { nodes: [], edges: [], width: 760, height: 380 };
+          this.relatedPersonRows = [];
+        } finally {
+          this.relatedPersonLoading = false;
+        }
+      },
+      async openRelationGraph() {
+        this.relationGraphOpen = true;
+        if (!this.relationGraphEdges.length) await this.loadRelatedPeople();
+      },
       fundNodeTransform(node) {
         return `translate(${node.x || 0} ${node.y || 0})`;
       },
@@ -874,6 +1048,61 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         if (!source || !target) return '';
         const midY = Math.round(((source.y || 0) + (target.y || 0)) / 2);
         return `M ${source.x} ${source.y - 28} C ${source.x} ${midY}, ${target.x} ${midY}, ${target.x} ${target.y + 34}`;
+      },
+      relationEdgePath(edge) {
+        const source = this.relationGraphNodes.find((node) => node.id === edge.source);
+        const target = this.relationGraphNodes.find((node) => node.id === edge.target);
+        if (!source || !target) return '';
+        const midX = Math.round(((source.x || 0) + (target.x || 0)) / 2);
+        return `M ${source.x + 98} ${source.y} C ${midX} ${source.y}, ${midX} ${target.y}, ${target.x - 98} ${target.y}`;
+      },
+      displayPersonName(personOrName) {
+        const name = typeof personOrName === 'string' ? personOrName : personOrName?.name;
+        return this.privacyMode ? maskPersonName(name) : String(name || '');
+      },
+      displayPersonInitial(personOrName) {
+        const name = this.displayPersonName(personOrName);
+        return String(name || '').slice(0, 1);
+      },
+      displayPersonId(idNumber) {
+        return this.privacyMode ? maskIdBirthday(idNumber) : String(idNumber || '');
+      },
+      displayDetailValue(row) {
+        if (!row) return '';
+        if (!this.privacyMode) return row.value;
+        if (row.label === '姓名') return maskPersonName(row.value);
+        if (row.label.includes('身份证')) return maskIdBirthday(row.value);
+        if (row.label.includes('联系') || row.label.includes('电话')) return maskPhoneTail(row.value);
+        return row.value;
+      },
+      displayExcelCell(row, header) {
+        const value = row?.excelFields?.[header?.key] ?? '';
+        if (!this.privacyMode) return value;
+        const label = String(header?.label || '');
+        if (label.includes('姓名')) return maskPersonName(value);
+        if (label.includes('身份证')) return maskIdBirthday(value);
+        if (label.includes('联系') || label.includes('电话') || label.includes('手机')) return maskPhoneTail(value);
+        return value;
+      },
+      displayFundNodeLabel(node) {
+        return this.privacyMode ? maskPersonName(node?.label) : String(node?.label || '');
+      },
+      relationNodeSubtitle(node) {
+        return String(node?.amount || node?.level || '');
+      },
+      relationNodeLines(node) {
+        const lines = [];
+        const relation = String(node?.level || '').trim();
+        const name = this.displayFundNodeLabel(node);
+        const idNumber = this.displayPersonId(node?.idNumber);
+        const phone = this.privacyMode ? maskPhoneTail(node?.phone) : String(node?.phone || '').trim();
+        const occupation = String(node?.occupation || '').trim();
+        if (relation) lines.push(`关系：${relation}`);
+        if (name) lines.push(`姓名：${name}`);
+        if (idNumber) lines.push(`身份证号：${idNumber}`);
+        if (phone) lines.push(`电话：${phone}`);
+        if (occupation) lines.push(`职业：${occupation}`);
+        return lines.length ? lines : ['暂无信息'];
       },
       togglePrivacy() {
         this.privacyMode = !this.privacyMode;
@@ -963,7 +1192,7 @@ function regionSliceSegments(rows = []) {
     return [{
       bucket: { key: 'empty', label: '暂无数据', count: 0 },
       color: '#2b3e77',
-      path: describePieSlice(60, 60, 56, 0, 359.99),
+      path: describeDonutSlice(60, 60, 56, 30, 0, 359.99),
       labelX: 60,
       labelY: 60,
       displayLabel: '暂无数据',
@@ -987,9 +1216,10 @@ function regionSliceSegments(rows = []) {
     const segment = {
       bucket,
       color: bucket.color,
-      path: describePieSlice(60, 60, 56, startDeg, endDeg),
+      path: describeDonutSlice(60, 60, 56, 30, startDeg, endDeg),
       startAngle: normalizeAngle(startDeg),
       endAngle: normalizeAngle(endDeg),
+      labelAngle: labelDeg,
       labelX,
       labelY,
       displayLabel: `${bucket.label} ${count}人`,
@@ -1152,6 +1382,21 @@ function describePieSlice(cx, cy, radius, startAngle, endAngle) {
     `M ${cx} ${cy}`,
     `L ${start.x.toFixed(2)} ${start.y.toFixed(2)}`,
     `A ${radius} ${radius} 0 ${largeArcFlag} 1 ${end.x.toFixed(2)} ${end.y.toFixed(2)}`,
+    'Z',
+  ].join(' ');
+}
+
+function describeDonutSlice(cx, cy, outerRadius, innerRadius, startAngle, endAngle) {
+  const outerStart = polarPoint(cx, cy, outerRadius, startAngle);
+  const outerEnd = polarPoint(cx, cy, outerRadius, endAngle);
+  const innerStart = polarPoint(cx, cy, innerRadius, startAngle);
+  const innerEnd = polarPoint(cx, cy, innerRadius, endAngle);
+  const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
+  return [
+    `M ${outerStart.x.toFixed(2)} ${outerStart.y.toFixed(2)}`,
+    `A ${outerRadius} ${outerRadius} 0 ${largeArcFlag} 1 ${outerEnd.x.toFixed(2)} ${outerEnd.y.toFixed(2)}`,
+    `L ${innerEnd.x.toFixed(2)} ${innerEnd.y.toFixed(2)}`,
+    `A ${innerRadius} ${innerRadius} 0 ${largeArcFlag} 0 ${innerStart.x.toFixed(2)} ${innerStart.y.toFixed(2)}`,
     'Z',
   ].join(' ');
 }

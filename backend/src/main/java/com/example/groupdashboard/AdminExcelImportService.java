@@ -197,6 +197,66 @@ public class AdminExcelImportService {
         "total", filtered.size());
   }
 
+  public Map<String, Object> relatedPeopleGraph(String name, String idNumber) {
+    ImportType type = ImportType.RELATED_PEOPLE;
+    ensureSchema(type);
+    List<Map<String, Object>> headers = loadHeaders(type);
+    Map<String, String> labelByKey = labelByKey(headers);
+    List<Map<String, Object>> rows = loadRows(type);
+    String targetName = firstNonBlank(name);
+    String targetId = firstNonBlank(idNumber);
+
+    Map<String, Object> primary = graphNode("primary", firstNonBlank(targetName, "当前人员"), targetId, "当前人员", "", "", 120, 180, true);
+    List<Map<String, Object>> nodes = new ArrayList<>();
+    List<Map<String, Object>> edges = new ArrayList<>();
+    List<Map<String, Object>> relatedRows = new ArrayList<>();
+    nodes.add(primary);
+
+    int index = 0;
+    for (Map<String, Object> row : rows) {
+      Object fieldsObject = row.get("fields");
+      if (!(fieldsObject instanceof Map<?, ?> rawFields)) continue;
+      Map<String, Object> fields = new LinkedHashMap<>();
+      rawFields.forEach((key, value) -> fields.put(String.valueOf(key), value));
+      RelatedIdentity main = relatedIdentity(fields, labelByKey, false);
+      RelatedIdentity relation = relatedIdentity(fields, labelByKey, true);
+      String relationType = firstNonBlank(valueByAnyLabel(fields, labelByKey, List.of("关系", "关联关系", "关系类型", "关联类型")), "关联人");
+
+      RelatedIdentity display = null;
+      if (identityMatches(main, targetName, targetId)) {
+        display = relation;
+      } else if (identityMatches(relation, targetName, targetId)) {
+        display = main;
+      } else if (rowMatches(fields, targetName, targetId)) {
+        display = relation.isBlank() ? main : relation;
+      }
+      if (display == null || display.isBlank()) continue;
+
+      String nodeId = "related-" + index;
+      int y = 86 + index * 132;
+      nodes.add(graphNode(nodeId, firstNonBlank(display.name(), "未填写"), display.idNumber(), relationType, display.phone(), display.occupation(), 560, y, false));
+      edges.add(Map.of("source", "primary", "target", nodeId, "relation", relationType, "rowIndex", index));
+      relatedRows.add(Map.of(
+          "name", firstNonBlank(display.name(), "未填写"),
+          "idNumber", display.idNumber(),
+          "phone", display.phone(),
+          "occupation", display.occupation(),
+          "relation", relationType,
+          "fields", fields));
+      index++;
+    }
+
+    int height = Math.max(380, 150 + Math.max(1, index) * 132);
+    primary.put("y", height / 2);
+    return Map.of(
+        "total", relatedRows.size(),
+        "rows", relatedRows,
+        "summary", relatedRows.stream()
+            .map(row -> firstNonBlank(String.valueOf(row.get("relation")), "关联人") + "：" + firstNonBlank(String.valueOf(row.get("name")), "未填写"))
+            .toList(),
+        "graph", Map.of("nodes", nodes, "edges", edges, "width", 760, "height", height));
+  }
+
   private List<Map<String, Object>> hiddenInvestorHeadersSnapshot() {
     List<Map<String, Object>> cached = hiddenInvestorHeadersCache;
     if (cached != null) return cached;
@@ -397,7 +457,7 @@ public class AdminExcelImportService {
     person.put("libraryStatus", riskLabel(group) + "，隐名投资");
     person.put("policeWarning", firstNonBlank(fieldByLabels(fields, labelByKey, List.of("公安预警", "公安预警（平台线索）")), "无"));
     person.put("relatedPerson", firstNonBlank(fieldByLabels(fields, labelByKey, List.of("关联人", "关联人基本情况")), "未填写"));
-    person.put("latestNote", firstNonBlank(fieldByLabels(fields, labelByKey, List.of("备注", "就诊情况")), "隐名投资人导入数据"));
+    person.put("latestNote", firstNonBlank(fieldByLabels(fields, labelByKey, List.of("备注", "就诊情况")), "未填写"));
     person.put("photoUrl", null);
     person.put("excelFields", fields);
     person.put("fundIdentity", Map.of("idNumber", idNumber, "name", name));
@@ -439,6 +499,129 @@ public class AdminExcelImportService {
       }
     }
     return "";
+  }
+
+  private RelatedIdentity relatedIdentity(Map<String, Object> fields, Map<String, String> labelByKey, boolean relationSide) {
+    if (relationSide) {
+      RelatedIdentity afterRelation = relatedIdentityAfterRelationColumn(fields, labelByKey);
+      if (!afterRelation.isBlank()) return afterRelation;
+    }
+    List<String> nameLabels = relationSide
+        ? List.of("关联人姓名", "关系人姓名", "亲属姓名", "关联姓名")
+        : List.of("主人员姓名", "主姓名", "本人姓名", "人员姓名", "投资人姓名", "显名姓名", "姓名");
+    List<String> idLabels = relationSide
+        ? List.of("关联人身份证", "关系人身份证", "亲属身份证", "关联身份证")
+        : List.of("主人员身份证", "主身份证", "本人身份证", "人员身份证", "投资人身份证", "身份证号", "证件号码");
+    List<String> phoneLabels = relationSide
+        ? List.of("关联人电话", "关系人电话", "亲属电话")
+        : List.of("主人员电话", "本人电话", "联系电话", "手机号", "电话");
+    List<String> occupationLabels = relationSide
+        ? List.of("关联人职业", "关系人职业", "亲属职业", "职业", "工作单位", "从业单位")
+        : List.of("主人员职业", "本人职业", "职业", "工作单位", "从业单位");
+    return new RelatedIdentity(
+        valueByAnyLabel(fields, labelByKey, nameLabels),
+        valueByAnyLabel(fields, labelByKey, idLabels),
+        valueByAnyLabel(fields, labelByKey, phoneLabels),
+        valueByAnyLabel(fields, labelByKey, occupationLabels));
+  }
+
+  private RelatedIdentity relatedIdentityAfterRelationColumn(Map<String, Object> fields, Map<String, String> labelByKey) {
+    List<Map.Entry<String, Object>> entries = new ArrayList<>(fields.entrySet());
+    int relationIndex = -1;
+    for (int index = 0; index < entries.size(); index++) {
+      String label = labelByKey.getOrDefault(entries.get(index).getKey(), "").trim();
+      if (label.contains("关系") || label.contains("关联类型") || label.contains("关联关系")) {
+        relationIndex = index;
+        break;
+      }
+    }
+    if (relationIndex < 0) return new RelatedIdentity("", "", "", "");
+
+    String name = "";
+    String idNumber = "";
+    String phone = "";
+    String occupation = "";
+    for (int index = relationIndex + 1; index < Math.min(entries.size(), relationIndex + 8); index++) {
+      Map.Entry<String, Object> entry = entries.get(index);
+      String label = labelByKey.getOrDefault(entry.getKey(), "").trim();
+      String value = String.valueOf(entry.getValue() == null ? "" : entry.getValue()).trim();
+      if (value.isBlank()) continue;
+      if (idNumber.isBlank() && (label.contains("身份证") || label.contains("证件") || looksLikeIdNumber(value))) {
+        idNumber = value;
+        continue;
+      }
+      if (phone.isBlank() && (label.contains("电话") || label.contains("手机") || looksLikePhone(value))) {
+        phone = value;
+        continue;
+      }
+      if (occupation.isBlank() && (label.contains("职业") || label.contains("工作") || label.contains("单位"))) {
+        occupation = value;
+        continue;
+      }
+      if (name.isBlank() && (label.contains("姓名") || label.contains("名称") || looksLikeChineseName(value))) {
+        name = value;
+      }
+    }
+    return new RelatedIdentity(name, idNumber, phone, occupation);
+  }
+
+  private boolean looksLikeIdNumber(String value) {
+    return value.matches(".*\\d{6}\\d{8}\\d{3}[0-9Xx].*");
+  }
+
+  private boolean looksLikePhone(String value) {
+    return value.matches(".*1\\d{10}.*");
+  }
+
+  private boolean looksLikeChineseName(String value) {
+    return value.matches("[\\u4e00-\\u9fa5·]{2,8}");
+  }
+
+  private String valueByAnyLabel(Map<String, Object> fields, Map<String, String> labelByKey, List<String> labels) {
+    for (String expected : labels) {
+      for (Map.Entry<String, Object> entry : fields.entrySet()) {
+        String label = labelByKey.getOrDefault(entry.getKey(), "").trim();
+        if (label.contains(expected)) {
+          return String.valueOf(entry.getValue() == null ? "" : entry.getValue()).trim();
+        }
+      }
+    }
+    return "";
+  }
+
+  private boolean identityMatches(RelatedIdentity identity, String targetName, String targetId) {
+    if (identity == null) return false;
+    if (!targetId.isBlank() && !identity.idNumber().isBlank() && identity.idNumber().contains(targetId)) return true;
+    return !targetName.isBlank() && !identity.name().isBlank() && identity.name().contains(targetName);
+  }
+
+  private boolean rowMatches(Map<String, Object> fields, String targetName, String targetId) {
+    String text = searchText(Map.of("fields", fields));
+    if (!targetId.isBlank() && text.contains(targetId)) return true;
+    return !targetName.isBlank() && text.contains(targetName);
+  }
+
+  private Map<String, Object> graphNode(String id, String label, String idNumber, String level, String phone, String occupation, int x, int y, boolean primary) {
+    Map<String, Object> node = new LinkedHashMap<>();
+    node.put("id", id);
+    node.put("label", label);
+    node.put("fullLabel", label);
+    node.put("idNumber", idNumber);
+    node.put("level", level);
+    node.put("phone", phone);
+    node.put("occupation", occupation);
+    node.put("x", x);
+    node.put("y", y);
+    node.put("primary", primary);
+    return node;
+  }
+
+  private record RelatedIdentity(String name, String idNumber, String phone, String occupation) {
+    boolean isBlank() {
+      return (name == null || name.isBlank())
+          && (idNumber == null || idNumber.isBlank())
+          && (phone == null || phone.isBlank());
+    }
   }
 
   private Map<String, Object> hiddenGroups(

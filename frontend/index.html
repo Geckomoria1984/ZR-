@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>黑龙江省群体架构图</title>
     <link rel="stylesheet" href="/vendor/element-plus.css?v=local-20260608">
-    <link rel="stylesheet" href="/src/styles.css?v=keep-chart-dialog-stack-20260611">
+    <link rel="stylesheet" href="/src/styles.css?v=relation-node-fields-20260612">
   </head>
   <body>
     <div id="app" v-cloak>
@@ -17,7 +17,7 @@
             <a v-if="isHiddenScope" class="admin-entry-link" href="index.html" aria-label="返回显名首页">显名首页</a>
             <a class="admin-entry-link" href="admin.html" aria-label="进入后台管理系统">后台管理</a>
             <el-button class="privacy-toggle" :aria-pressed="privacyMode" @click="togglePrivacy">
-              <span></span>{{ privacyMode ? '隐私开' : '隐私关' }}
+              <span></span>{{ privacyMode ? '一键显示' : '一键隐藏' }}
             </el-button>
             <el-button class="diamond-btn" circle aria-label="定位视图"></el-button>
           </div>
@@ -38,7 +38,6 @@
                   {{ groups[groupKey].title }}<span>{{ groups[groupKey].count }}人</span>
                 </el-button>
                 <small>{{ groups[groupKey].subtitle }}</small>
-                <el-button class="view-all-link open-list" size="small" @click="openDrawer(groupKey)">查看全部</el-button>
               </div>
               <el-radio-group v-model="sectionFilters[groupKey]" class="legend" @change="resetSectionPage(groupKey)">
                 <el-radio-button label="all">
@@ -73,12 +72,12 @@
                       type="button"
                       @click="openProfile(person)"
                     >
-                      <span class="portrait" :class="`portrait-${person.avatarIndex % 8}`" :aria-label="`${person.name}照片`">
-                        <img v-if="person.photoUrl" :src="person.photoUrl" :alt="`${person.name}照片`">
-                        <span v-else class="portrait-face">{{ person.name.slice(0, 1) }}</span>
+                      <span class="portrait" :class="`portrait-${person.avatarIndex % 8}`" :aria-label="`${displayPersonName(person)}照片`">
+                        <img v-if="person.photoUrl" :src="person.photoUrl" :alt="`${displayPersonName(person)}照片`">
+                        <span v-else class="portrait-face">{{ displayPersonInitial(person) }}</span>
                       </span>
                       <span class="person-mini-content">
-                        <strong>{{ person.name }} {{ person.gender }} {{ person.age }}岁</strong>
+                        <strong>{{ displayPersonName(person) }} {{ person.gender }} {{ person.age }}岁</strong>
                         <span>投资金额:<b class="sensitive">{{ displayInvestmentAmount(person) }}</b></span>
                         <span>职业:{{ person.occupation }}</span>
                         <span>突出行为:{{ person.behavior }}</span>
@@ -182,6 +181,9 @@
                 >
                   <title>{{ segment.bucket.label }} {{ segment.bucket.count }}人</title>
                 </path>
+                <circle class="city-distribution-center-disc" cx="60" cy="60" r="30"></circle>
+                <text class="city-distribution-center-label" x="60" y="56" text-anchor="middle">总计</text>
+                <text class="city-distribution-center-value" x="60" y="68" text-anchor="middle">{{ cityDistrictTotal }}人</text>
               </svg>
             </div>
           </article>
@@ -304,6 +306,9 @@
               >
                 <title>{{ segment.bucket.label }} {{ segment.bucket.count }}人</title>
               </path>
+              <circle class="province-city-center-disc" cx="60" cy="60" r="30"></circle>
+              <text class="province-city-center-label" x="60" y="56" text-anchor="middle">总计</text>
+              <text class="province-city-center-value" x="60" y="68" text-anchor="middle">{{ outsideProvinceTotal }}人</text>
               <g
                 v-for="segment in outsideProvinceSegments"
                 :key="`outside-province-label-${segment.bucket.key}`"
@@ -355,6 +360,9 @@
               >
                 <title>{{ segment.bucket.label }} {{ segment.bucket.count }}人</title>
               </path>
+              <circle class="province-city-center-disc" cx="60" cy="60" r="30"></circle>
+              <text class="province-city-center-label" x="60" y="56" text-anchor="middle">总计</text>
+              <text class="province-city-center-value" x="60" y="68" text-anchor="middle">{{ provinceCityTotal }}人</text>
               <g
                 v-for="segment in provinceCitySegments"
                 :key="`province-city-label-${segment.bucket.key}`"
@@ -412,12 +420,12 @@
             type="button"
             @click="openProfile(person)"
           >
-            <span class="portrait" :class="`portrait-${person.avatarIndex % 8}`" :aria-label="`${person.name}照片`">
-              <img v-if="person.photoUrl" :src="person.photoUrl" :alt="`${person.name}照片`">
-              <span v-else class="portrait-face">{{ person.name.slice(0, 1) }}</span>
+            <span class="portrait" :class="`portrait-${person.avatarIndex % 8}`" :aria-label="`${displayPersonName(person)}照片`">
+              <img v-if="person.photoUrl" :src="person.photoUrl" :alt="`${displayPersonName(person)}照片`">
+              <span v-else class="portrait-face">{{ displayPersonInitial(person) }}</span>
             </span>
             <span class="person-mini-content">
-              <strong>{{ person.name }} {{ person.gender }} {{ person.age }}岁</strong>
+              <strong>{{ displayPersonName(person) }} {{ person.gender }} {{ person.age }}岁</strong>
               <span>投资金额:<b class="sensitive">{{ displayInvestmentAmount(person) }}</b></span>
               <span>职业:{{ person.occupation }}</span>
               <span>突出行为:{{ person.behavior }}</span>
@@ -451,7 +459,9 @@
               :width="header.width"
               :fixed="header.fixed"
               show-overflow-tooltip
-            ></el-table-column>
+            >
+              <template #default="{ row }">{{ displayExcelCell(row, header) }}</template>
+            </el-table-column>
             <el-table-column label="操作" width="100" fixed="right">
               <template #default="{ row }">
                 <el-button link type="primary" @click="openProfile(row)">详情</el-button>
@@ -485,11 +495,12 @@
                 <img v-if="activePerson.photoUrl" :src="activePerson.photoUrl" :alt="`${activePerson.name}照片`">
                 <span v-else>{{ activePerson.name.slice(0, 1) }}</span>
               </div>
-              <strong id="profileName">{{ activePerson.name }}</strong>
+              <strong id="profileName">{{ displayPersonName(activePerson) }}</strong>
               <b>{{ activePerson.age }}岁&nbsp;&nbsp;{{ activePerson.gender }}&nbsp;&nbsp;{{ activePerson.nation || '汉族' }}</b>
-              <p>{{ activePerson.idNumber }}</p>
+              <p>{{ displayPersonId(activePerson.idNumber) }}</p>
               <div class="detail-relation-actions">
                 <el-button type="primary" @click="openFundGraph">资金图谱关系</el-button>
+                <el-button type="success" @click="openRelationGraph">关联人图谱</el-button>
               </div>
               <button class="relation-map fund-graph-map" type="button" aria-label="点击放大资金关系图谱" @click="openFundGraph">
                 <svg class="fund-graph-svg fund-graph-dynamic fund-graph-preview" :viewBox="fundGraphViewBox" role="img" aria-label="资金关系图谱预览">
@@ -510,7 +521,7 @@
                     @click.stop="openGraphNodeProfile(node)"
                   >
                     <rect x="-76" y="-31" width="152" height="62" rx="7"></rect>
-                    <text class="fund-node-name" x="0" y="-11">{{ node.label }}</text>
+                    <text class="fund-node-name" x="0" y="-11">{{ displayFundNodeLabel(node) }}</text>
                     <text v-if="fundNodeAmount(node)" class="fund-node-amount" x="0" y="5">{{ fundNodeAmount(node) }}</text>
                     <text class="fund-node-level" x="0" y="21">{{ node.level }}</text>
                   </g>
@@ -521,10 +532,15 @@
               </button>
             </aside>
             <div class="detail-fields">
-              <div v-for="row in detailRows" :key="row.label" class="detail-line" :class="{ 'detail-line-wide': row.wide }">
+              <div
+                v-for="row in detailRows"
+                :key="row.label"
+                class="detail-line"
+                :class="{ 'detail-line-wide': row.wide, 'detail-line-medical': row.label === '就诊情况' }"
+              >
                 <span class="detail-line-icon">{{ row.icon }}</span>
                 <span class="detail-label">{{ row.label }}：</span>
-                <strong :class="{ highlight: row.highlight, sensitive: row.label.includes('金额') || row.label.includes('投资') }">{{ row.value }}</strong>
+                <strong :class="{ highlight: row.highlight, sensitive: row.label.includes('金额') || row.label.includes('投资') }">{{ displayDetailValue(row) }}</strong>
               </div>
             </div>
           </div>
@@ -535,7 +551,7 @@
         <template #header>
           <div class="fund-dialog-head">
             <h2>资金关系图谱</h2>
-            <span>{{ activePerson?.name || '人员' }} → 上一层投资资金</span>
+            <span>{{ activePerson ? displayPersonName(activePerson) : '人员' }} → 上一层投资资金</span>
           </div>
         </template>
         <div class="fund-graph-large">
@@ -557,7 +573,7 @@
               @click.stop="openGraphNodeProfile(node)"
             >
               <rect x="-76" y="-31" width="152" height="62" rx="7"></rect>
-              <text class="fund-node-name" x="0" y="-11">{{ node.label }}</text>
+              <text class="fund-node-name" x="0" y="-11">{{ displayFundNodeLabel(node) }}</text>
               <text v-if="fundNodeAmount(node)" class="fund-node-amount" x="0" y="5">{{ fundNodeAmount(node) }}</text>
               <text class="fund-node-level" x="0" y="21">{{ node.level }}</text>
             </g>
@@ -566,10 +582,50 @@
           </svg>
         </div>
       </el-dialog>
+
+      <el-dialog v-model="relationGraphOpen" class="fund-graph-dialog relation-graph-dialog" width="96vw" top="2vh">
+        <template #header>
+          <div class="fund-dialog-head">
+            <h2>关联人图谱</h2>
+            <span>{{ activePerson ? displayPersonName(activePerson) : '人员' }} → 关联人信息</span>
+          </div>
+        </template>
+        <div class="fund-graph-large relation-graph-large">
+          <svg class="fund-graph-svg fund-graph-dynamic" :viewBox="relationGraphViewBox" role="img" aria-label="关联人关系图谱">
+            <defs>
+              <marker id="relationArrowLarge" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z"></path>
+              </marker>
+            </defs>
+            <g v-for="edge in relationGraphEdges" :key="`${edge.source}-${edge.target}-${edge.rowIndex}`">
+              <path class="fund-edge relation-edge" :d="relationEdgePath(edge)" marker-end="url(#relationArrowLarge)"></path>
+            </g>
+            <g
+              v-for="node in relationGraphNodes"
+              :key="node.id"
+              class="fund-node fund-graph-node relation-graph-node"
+              :class="{ 'fund-node-primary': node.primary }"
+              :transform="fundNodeTransform(node)"
+            >
+              <rect x="-98" y="-52" width="196" height="104" rx="9"></rect>
+              <text class="relation-node-lines" x="0" y="-34">
+                <tspan
+                  v-for="(line, lineIndex) in relationNodeLines(node)"
+                  :key="`${node.id}-line-${lineIndex}`"
+                  x="0"
+                  :dy="lineIndex === 0 ? 0 : 17"
+                >{{ line }}</tspan>
+              </text>
+            </g>
+            <text v-if="!relationGraphEdges.length && !relatedPersonLoading" class="fund-empty-text" x="380" y="184">暂无关联人图谱数据</text>
+            <text v-if="relatedPersonLoading" class="fund-empty-text" x="380" y="184">关联人图谱加载中</text>
+          </svg>
+        </div>
+      </el-dialog>
     </div>
 
     <script src="/vendor/vue.global.prod.js?v=local-20260608"></script>
     <script src="/vendor/element-plus.full.min.js?v=local-20260608"></script>
-    <script type="module" src="/src/app.js?v=keep-chart-dialog-stack-20260611"></script>
+    <script type="module" src="/src/app.js?v=relation-node-fields-20260612"></script>
   </body>
 </html>
