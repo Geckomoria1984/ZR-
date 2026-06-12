@@ -210,6 +210,7 @@ public class AdminExcelImportService {
     List<Map<String, Object>> nodes = new ArrayList<>();
     List<Map<String, Object>> edges = new ArrayList<>();
     List<Map<String, Object>> relatedRows = new ArrayList<>();
+    Map<String, Boolean> seenRelated = new LinkedHashMap<>();
     nodes.add(primary);
 
     int index = 0;
@@ -220,17 +221,22 @@ public class AdminExcelImportService {
       rawFields.forEach((key, value) -> fields.put(String.valueOf(key), value));
       RelatedIdentity main = relatedIdentity(fields, labelByKey, false);
       RelatedIdentity relation = relatedIdentity(fields, labelByKey, true);
-      String relationType = firstNonBlank(valueByAnyLabel(fields, labelByKey, List.of("关系", "关联关系", "关系类型", "关联类型")), "关联人");
+      String rawRelationType = firstNonBlank(valueByAnyLabel(fields, labelByKey, List.of("关系", "关联关系", "关系类型", "关联类型")), "关联人");
+      String relationType = rawRelationType;
 
       RelatedIdentity display = null;
       if (identityMatches(main, targetName, targetId)) {
         display = relation;
       } else if (identityMatches(relation, targetName, targetId)) {
         display = main;
+        relationType = inverseRelation(rawRelationType, main);
       } else if (rowMatches(fields, targetName, targetId)) {
         display = relation.isBlank() ? main : relation;
       }
       if (display == null || display.isBlank()) continue;
+      String relatedKey = relatedIdentityKey(display);
+      if (!relatedKey.isBlank() && seenRelated.containsKey(relatedKey)) continue;
+      if (!relatedKey.isBlank()) seenRelated.put(relatedKey, true);
 
       String nodeId = "related-" + index;
       int y = 86 + index * 132;
@@ -454,7 +460,7 @@ public class AdminExcelImportService {
     person.put("onlineSpeech", "无");
     person.put("socialAccount", "未填写");
     person.put("vehicle", "无");
-    person.put("libraryStatus", riskLabel(group) + "，隐名投资");
+    person.put("libraryStatus", hiddenLibraryStatus(fields, labelByKey, group));
     person.put("policeWarning", firstNonBlank(fieldByLabels(fields, labelByKey, List.of("公安预警", "公安预警（平台线索）")), "无"));
     person.put("relatedPerson", firstNonBlank(fieldByLabels(fields, labelByKey, List.of("关联人", "关联人基本情况")), "未填写"));
     person.put("latestNote", firstNonBlank(fieldByLabels(fields, labelByKey, List.of("备注", "就诊情况")), "未填写"));
@@ -471,6 +477,20 @@ public class AdminExcelImportService {
       map.forEach((key, value) -> fields.put(String.valueOf(key), value));
     }
     return fields;
+  }
+
+  private String hiddenLibraryStatus(Map<String, Object> fields, Map<String, String> labelByKey, String group) {
+    String direct = firstNonBlank(
+        fieldByLabels(fields, labelByKey, List.of("是否在库", "在库情况", "列库情况")));
+    if (!direct.isBlank()) return direct;
+    String level = firstNonBlank(
+        fieldByLabels(fields, labelByKey, List.of("在库级别", "列库级别", "库内级别", "自身等级", "等级")));
+    String reason = firstNonBlank(
+        fieldByLabels(fields, labelByKey, List.of("列库原因", "在库原因", "入库原因", "列管原因")));
+    if (!level.isBlank() && !reason.isBlank()) return level + "," + reason;
+    if (!level.isBlank()) return level;
+    if (!reason.isBlank()) return reason;
+    return "不在库";
   }
 
   private Map<String, String> labelByKey(List<Map<String, Object>> headers) {
@@ -593,6 +613,41 @@ public class AdminExcelImportService {
     if (identity == null) return false;
     if (!targetId.isBlank() && !identity.idNumber().isBlank() && identity.idNumber().contains(targetId)) return true;
     return !targetName.isBlank() && !identity.name().isBlank() && identity.name().contains(targetName);
+  }
+
+  private String relatedIdentityKey(RelatedIdentity identity) {
+    if (identity == null) return "";
+    String idNumber = firstNonBlank(identity.idNumber()).replaceAll("\\s+", "");
+    if (!idNumber.isBlank()) return "id:" + idNumber;
+    String name = firstNonBlank(identity.name()).replaceAll("\\s+", "");
+    if (!name.isBlank()) return "name:" + name;
+    String phone = firstNonBlank(identity.phone()).replaceAll("\\s+", "");
+    if (!phone.isBlank()) return "phone:" + phone;
+    return "";
+  }
+
+  private String inverseRelation(String relation, RelatedIdentity opposite) {
+    String cleanRelation = firstNonBlank(relation, "关联人").replaceAll("\\s+", "");
+    return switch (cleanRelation) {
+      case "丈夫", "老公", "夫" -> "妻子";
+      case "妻子", "老婆", "妻" -> "丈夫";
+      case "父亲", "爸爸", "父" -> "子女";
+      case "母亲", "妈妈", "母" -> "子女";
+      case "儿子", "子" -> genderRelation(opposite, "父亲", "母亲", "父母");
+      case "女儿", "女" -> genderRelation(opposite, "父亲", "母亲", "父母");
+      case "哥哥", "弟弟" -> "兄弟";
+      case "姐姐", "妹妹" -> "姐妹";
+      default -> cleanRelation;
+    };
+  }
+
+  private String genderRelation(RelatedIdentity identity, String maleLabel, String femaleLabel, String fallback) {
+    String idNumber = firstNonBlank(identity == null ? "" : identity.idNumber()).replaceAll("\\s+", "");
+    if (idNumber.matches("\\d{17}[0-9Xx]")) {
+      int genderDigit = Character.digit(idNumber.charAt(16), 10);
+      if (genderDigit >= 0) return genderDigit % 2 == 1 ? maleLabel : femaleLabel;
+    }
+    return fallback;
   }
 
   private boolean rowMatches(Map<String, Object> fields, String targetName, String targetId) {

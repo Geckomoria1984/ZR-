@@ -196,8 +196,59 @@ public class AdminPeopleService {
       person.put("group", "general");
       person.put("risk", "一般参与");
     }
+    person.put("libraryStatus", normalizedLibraryStatus(person));
     String district = String.valueOf(person.getOrDefault("district", ""));
     person.put("locality", district.contains("哈尔滨") || isHarbinDistrict(district) ? "本市" : "外市");
+  }
+
+  private String normalizedLibraryStatus(Map<String, Object> person) {
+    String current = String.valueOf(person.getOrDefault("libraryStatus", "")).trim();
+    if (!isLegacyLibraryStatus(current)) return current.isBlank() ? "未填写" : current;
+    String direct = firstNonBlank(
+        excelFieldByLabels(person, List.of("是否在库", "在库情况", "列库情况")));
+    if (!direct.isBlank() && !isLegacyLibraryStatus(direct)) return direct;
+    String level = firstNonBlank(
+        excelFieldByLabels(person, List.of("在库级别", "列库级别", "库内级别")));
+    String reason = firstNonBlank(
+        excelFieldByLabels(person, List.of("列库原因", "在库原因", "入库原因", "列管原因")));
+    if (!level.isBlank() && !reason.isBlank()) return level + "," + reason;
+    if (!level.isBlank()) return level;
+    if (!reason.isBlank()) return reason;
+    return "不在库";
+  }
+
+  private boolean isLegacyLibraryStatus(String status) {
+    if (status == null || status.isBlank()) return true;
+    return status.contains("投资") && List.of("组织串联", "活跃响应", "一般参与", "密切关注").stream().anyMatch(status::contains);
+  }
+
+  private String excelFieldByLabels(Map<String, Object> person, List<String> labels) {
+    Object rawFields = person.get("excelFields");
+    if (!(rawFields instanceof Map<?, ?> fields)) return "";
+    for (Map.Entry<?, ?> entry : fields.entrySet()) {
+      String key = String.valueOf(entry.getKey());
+      String label = headerLabel(key);
+      if (labels.stream().anyMatch(label::equals)) {
+        return String.valueOf(entry.getValue() == null ? "" : entry.getValue()).trim();
+      }
+    }
+    return "";
+  }
+
+  private String headerLabel(String key) {
+    for (Map<String, Object> header : headers) {
+      if (key.equals(String.valueOf(header.get("key")))) {
+        return String.valueOf(header.getOrDefault("label", "")).trim();
+      }
+    }
+    return "";
+  }
+
+  private String firstNonBlank(String... values) {
+    for (String value : values) {
+      if (value != null && !value.trim().isBlank()) return value.trim();
+    }
+    return "";
   }
 
   private boolean contains(Object source, String query) {

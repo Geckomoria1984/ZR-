@@ -60,7 +60,7 @@ export function buildDetailRows(person, options = {}) {
     { icon: '☎', label: '联系电话', value: value('phone'), wide: true },
     { icon: '▣', label: '职业', value: value('occupation') },
     { icon: '▤', label: '车辆信息', value: value('vehicle', '无') },
-    { icon: '▤', label: '是否在库', value: value('libraryStatus', `${value('risk')}，${value('otherInvestment', '中植')}投资`), highlight: true },
+    { icon: '▤', label: '是否在库', value: value('libraryStatus', '不在库'), highlight: true },
     { icon: '⚠', label: '公安预警', value: value('policeWarning', '有'), highlight: true },
     { icon: '⌂', label: '户籍地', value: displayResidenceArea(person), wide: true },
     { icon: '⌖', label: '现住址', value: value('currentAddress', value('address')), wide: true },
@@ -70,6 +70,12 @@ export function buildDetailRows(person, options = {}) {
     { icon: '▦', label: '社区', value: value('community', '未填写') },
     { icon: '▤', label: '就诊情况', value: displayMedicalNote(person), wide: true },
   ];
+  if (isMeaningfulDetail(person.zrDisposal)) {
+    rows.splice(12, 0, { icon: '▣', label: 'ZR被打击人员', value: person.zrDisposal, highlight: true });
+  }
+  if (isMeaningfulDetail(person.criminalRecord)) {
+    rows.splice(12, 0, { icon: '▤', label: '前科劣迹', value: person.criminalRecord, highlight: true });
+  }
   if (isMeaningfulDetail(person.responsiblePerson)) {
     rows.splice(16, 0, { icon: '☷', label: '包保责任人', value: person.responsiblePerson, wide: true });
   }
@@ -147,16 +153,24 @@ function displayInvestmentAmount(person = {}) {
 
 function displayResidenceArea(person = {}) {
   const fields = person.excelFields || {};
+  const districtFieldValues = Object.entries(fields)
+    .filter(([label, value]) => {
+      const key = String(label || '').trim();
+      const text = String(value || '').trim();
+      return text && (key.startsWith('区') || key.includes('户籍区') || key.includes('户籍（区）') || key.includes('户籍(区)'));
+    })
+    .map(([, value]) => value);
   const dbValues = [
+    ...districtFieldValues,
     person.householdAddress,
     person.residenceAddress,
-    person.address,
     person.currentAddress,
+    person.address,
     ...Object.values(fields),
   ];
 
   const districtStreet = dbValues
-    .map((value) => extractDistrictStreetAddress(value))
+    .map((value) => extractDistrictStreetAddress(value, person.district))
     .find(Boolean);
   if (districtStreet) return districtStreet;
 
@@ -177,7 +191,7 @@ function displayResidenceArea(person = {}) {
     const text = String(value || '').trim();
     return key.startsWith('区') && text;
   });
-  const address = firstDisplayValue(districtEntry?.[1], person.address, '未填写');
+  const address = firstDisplayValue(districtEntry?.[1], person.householdAddress, person.residenceAddress, '未填写');
   return prependDistrictIfNeeded(person.district, address);
 }
 
@@ -185,16 +199,21 @@ function firstDisplayValue(...values) {
   return values.map((value) => String(value ?? '').trim()).find(Boolean) || '';
 }
 
-function extractDistrictStreetAddress(value = '') {
+function extractDistrictStreetAddress(value = '', districtHint = '') {
   const text = String(value || '').trim();
   if (!text || !text.includes('区')) return '';
   if (!/[街路道镇乡号]/.test(text)) return '';
-  const match = text.match(/(?:省|市)([^省市]+区.+)$/);
-  if (match?.[1]) return match[1].trim();
-  const districtIndex = text.indexOf('区');
-  const prefix = text.slice(0, districtIndex + 1);
-  const start = Math.max(0, prefix.search(/[\u4e00-\u9fa5]{1,8}区$/));
-  return text.slice(start).trim();
+  const harbinAreas = [
+    '南岗区', '道里区', '道外区', '香坊区', '平房区', '松北区', '呼兰区', '阿城区', '双城区',
+    '依兰县', '方正县', '宾县', '巴彦县', '木兰县', '通河县', '延寿县', '尚志市', '五常市',
+  ];
+  const hint = String(districtHint || '').trim();
+  const hintArea = hint && harbinAreas.find((area) => area.includes(hint) || hint.includes(area.replace(/[区县市]$/, '')));
+  const area = harbinAreas.find((item) => text.includes(item)) || hintArea;
+  if (!area) return '';
+  const areaIndex = text.indexOf(area);
+  if (areaIndex >= 0) return text.slice(areaIndex).trim();
+  return `${area}${text}`;
 }
 
 function prependDistrictIfNeeded(district = '', address = '') {
@@ -886,14 +905,33 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         }
       },
       async openProfile(person) {
-        this.activePerson = person;
+        const fullPerson = await this.loadFullProfilePerson(person);
+        this.activePerson = fullPerson;
         this.profileOpen = true;
         this.fundGraphOpen = false;
         this.relationGraphOpen = false;
         await Promise.all([
-          this.loadFundRelations(person),
-          this.loadRelatedPeople(person),
+          this.loadFundRelations(fullPerson),
+          this.loadRelatedPeople(fullPerson),
         ]);
+      },
+      async loadFullProfilePerson(person) {
+        if (!person) return person;
+        if (this.isHiddenScope) {
+          const identity = { name: person.name || '', idNumber: person.idNumber || '' };
+          return (await this.findPersonByGraphIdentity(identity)) || person;
+        }
+        const id = String(person.id || '').trim();
+        if (/^p\d+$/.test(id)) {
+          try {
+            const response = await fetch(apiUrl(`/api/admin/people/${encodeURIComponent(id)}`), { cache: 'no-store' });
+            if (response.ok) return normalizeApiPerson(await response.json());
+          } catch {
+            // fall back to identity lookup below
+          }
+        }
+        const identity = { name: person.name || '', idNumber: person.idNumber || '' };
+        return (await this.findPersonByGraphIdentity(identity)) || person;
       },
       async openGraphNodeProfile(node) {
         const identity = graphNodeIdentity(node);

@@ -343,7 +343,7 @@ public class ExcelDashboardService {
     person.put("onlineSpeech", onlineSpeech(row, headers, formatter));
     person.put("socialAccount", firstNonBlank(text(row, headers, "社交平台账号", formatter), "未填写"));
     person.put("vehicle", firstNonBlank(text(row, headers, "车辆信息", formatter), "无"));
-    person.put("libraryStatus", firstNonBlank(text(row, headers, "是否在库", formatter), riskLabel(group) + "，" + firstNonBlank(text(row, headers, "其他投资", formatter), "中植") + "投资"));
+    person.put("libraryStatus", libraryStatus(row, headers, formatter));
     person.put("policeWarning", firstNonBlank(text(row, headers, "公安预警（平台线索）", formatter), "无"));
     person.put("criminalRecord", text(row, headers, "前科累计情况", formatter));
     person.put("zrDisposal", text(row, headers, "ZR被处置打击人员", formatter));
@@ -374,6 +374,27 @@ public class ExcelDashboardService {
     addCountPart(parts, "挑头", text(row, headers, "网络发声挑头数据", formatter), "次");
     addCountPart(parts, "响应", text(row, headers, "网络发声响应数据", formatter), "次");
     return parts.isEmpty() ? "无" : String.join("，", parts);
+  }
+
+  private String libraryStatus(Row row, Map<String, Integer> headers, DataFormatter formatter) {
+    String direct = firstNonBlank(
+        text(row, headers, "是否在库", formatter),
+        text(row, headers, "在库情况", formatter),
+        text(row, headers, "列库情况", formatter));
+    if (!direct.isBlank()) return direct;
+    String level = firstNonBlank(
+        text(row, headers, "在库级别", formatter),
+        text(row, headers, "列库级别", formatter),
+        text(row, headers, "库内级别", formatter));
+    String reason = firstNonBlank(
+        text(row, headers, "列库原因", formatter),
+        text(row, headers, "在库原因", formatter),
+        text(row, headers, "入库原因", formatter),
+        text(row, headers, "列管原因", formatter));
+    if (!level.isBlank() && !reason.isBlank()) return level + "," + reason;
+    if (!level.isBlank()) return level;
+    if (!reason.isBlank()) return reason;
+    return "不在库";
   }
 
   private void addCountPart(List<String> parts, String label, String value, String unit) {
