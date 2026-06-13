@@ -115,6 +115,7 @@ public class ExcelDashboardService {
       List<ExcelColumn> excelColumns = excelColumns(sheet.getRow(0), formatter);
       List<Map<String, Object>> adminPeople = new ArrayList<>();
       Map<String, Long> harbinRegionCounts = new LinkedHashMap<>();
+      Map<String, Long> harbinRegionFullCounts = new LinkedHashMap<>();
       Map<String, Long> provinceCityCounts = new LinkedHashMap<>();
       Map<String, Long> provinceCityFullCounts = new LinkedHashMap<>();
       Map<String, Long> outsideProvinceCounts = new LinkedHashMap<>();
@@ -147,6 +148,10 @@ public class ExcelDashboardService {
         }
         if (isHeilongjiangNonHarbinCity(district)) {
           provinceCityFullCounts.merge(district, 1L, Long::sum);
+        } else if (isHarbinArea(district)) {
+          harbinRegionFullCounts.merge(district, 1L, Long::sum);
+        } else if (isHarbinCityText(district)) {
+          harbinRegionFullCounts.merge("哈尔滨未填写", 1L, Long::sum);
         }
         if (!isVisibleLevelGroup(group)) {
           if (isHarbinArea(district)) {
@@ -168,6 +173,7 @@ public class ExcelDashboardService {
       dashboard.put("excelColumns", excelColumnPayload(excelColumns));
       dashboard.put("regionStats", regionStats(harbinRegionCounts, provinceCityCounts));
       dashboard.put("regionRows", regionRows(harbinRegionCounts, provinceCityCounts));
+      dashboard.put("harbinRegionFullRows", harbinRegionRows(harbinRegionFullCounts));
       dashboard.put("provinceCityFullRows", provinceCityRows(provinceCityFullCounts));
       dashboard.put("outsideProvinceRows", outsideProvinceRows(outsideProvinceCounts));
       dashboard.put("riskBars", riskBars(groupCounts));
@@ -186,6 +192,7 @@ public class ExcelDashboardService {
 
     Map<String, String> labelByKey = excelLabelByKey(dashboard.get("excelColumns"));
     Map<String, Long> harbinRegionCounts = new LinkedHashMap<>();
+    Map<String, Long> harbinRegionFullCounts = new LinkedHashMap<>();
     Map<String, Long> provinceCityCounts = new LinkedHashMap<>();
     Map<String, Integer> groupCounts = new LinkedHashMap<>();
     Map<String, Map<String, Integer>> groupDistrictCounts = new LinkedHashMap<>();
@@ -217,6 +224,10 @@ public class ExcelDashboardService {
       String group = String.valueOf(person.getOrDefault("group", ""));
       if (isHeilongjiangNonHarbinCity(district)) {
         provinceCityFullCounts.merge(district, 1L, Long::sum);
+      } else if (isHarbinArea(district)) {
+        harbinRegionFullCounts.merge(district, 1L, Long::sum);
+      } else if (isHarbinCityText(district)) {
+        harbinRegionFullCounts.merge("哈尔滨未填写", 1L, Long::sum);
       }
       if (!isVisibleLevelGroup(group)) {
         if (isHarbinArea(district)) {
@@ -237,6 +248,7 @@ public class ExcelDashboardService {
     normalized.put("groups", groups(groupCounts, groupDistrictCounts));
     normalized.put("regionStats", regionStats(harbinRegionCounts, provinceCityCounts));
     normalized.put("regionRows", regionRows(harbinRegionCounts, provinceCityCounts));
+    normalized.put("harbinRegionFullRows", harbinRegionRows(harbinRegionFullCounts));
     normalized.put("provinceCityFullRows", provinceCityRows(provinceCityFullCounts));
     normalized.put("outsideProvinceRows", outsideProvinceRows(outsideProvinceCounts));
     normalized.put("riskBars", riskBars(groupCounts));
@@ -479,6 +491,14 @@ public class ExcelDashboardService {
         .toList();
   }
 
+  private List<List<Object>> harbinRegionRows(Map<String, Long> harbinCounts) {
+    return harbinCounts.entrySet().stream()
+        .filter(entry -> isHarbinArea(entry.getKey()) || "哈尔滨未填写".equals(entry.getKey()))
+        .sorted(this::compareRegionCountAsc)
+        .map(entry -> List.of((Object) entry.getKey(), (Object) entry.getValue()))
+        .toList();
+  }
+
   private List<List<Object>> outsideProvinceRows(Map<String, Long> provinceCounts) {
     return provinceCounts.entrySet().stream()
         .filter(entry -> !entry.getKey().isBlank())
@@ -500,6 +520,10 @@ public class ExcelDashboardService {
   private boolean isHarbinArea(String area) {
     if (area == null || area.isBlank() || "未填写".equals(area) || "总计".equals(area)) return false;
     return HARBIN_AREAS.stream().anyMatch(area::contains);
+  }
+
+  private boolean isHarbinCityText(String area) {
+    return area != null && area.contains("哈尔滨");
   }
 
   private boolean isHeilongjiangNonHarbinCity(String area) {

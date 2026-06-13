@@ -212,7 +212,12 @@ describe('dashboard data contract', () => {
       assert.match(html, /class="district-pie-segment"/);
       assert.match(html, /:d="segment\.path"/);
       assert.doesNotMatch(html, /cityDistrictSegments[\s\S]*:stroke-dasharray="segment\.dash"/);
-      assert.match(html, /@click\.stop="openDrawerForRegion\(segment\.bucket\.label\)"/);
+      assert.match(html, /@click="openCityDistrictStats"/);
+      assert.match(html, /v-model="cityDistrictStatsOpen"/);
+      assert.match(html, /哈尔滨全口径统计/);
+      assert.match(html, /openCityDistrictRegion\(segment\.bucket\.label\)/);
+      assert.match(html, /v-for="segment in cityDistrictLabelSegments"/);
+      assert.match(html, /v-for="row in cityDistrictRows"/);
       assert.match(html, /v-for="segment in provinceCitySegments"/);
       assert.match(html, /v-for="segment in outsideProvinceSegments"/);
       assert.match(html, /openProvinceCityStats/);
@@ -224,13 +229,21 @@ describe('dashboard data contract', () => {
       assert.match(html, /v-loading="regionLoading \|\| groupLoading"/);
       assert.match(script, /regionRows\[0\]/);
       assert.match(script, /regionRows\[1\]/);
+      assert.match(script, /harbinRegionFullRows: \[\]/);
+      assert.match(script, /payload\.harbinRegionFullRows/);
+      assert.match(script, /this\.harbinRegionFullRows\.length \? this\.harbinRegionFullRows/);
+      assert.match(script, /cityDistrictStatsOpen: false/);
+      assert.match(script, /cityDistrictRows\(\)/);
+      assert.match(script, /cityDistrictLabelSegments\(\)/);
+      assert.match(script, /openCityDistrictStats\(\)/);
+      assert.match(script, /openDrawerForRegion\(region, '', \{ fullScope: true \}\)/);
+      assert.match(script, /cityDistrictPercent\(row\)/);
       assert.match(script, /provinceCityLabelTransform/);
       assert.match(script, /outsideProvinceLabelTransform/);
       assert.match(script, /drawerMode = 'region'/);
       assert.match(script, /region,/);
       assert.match(script, /\/api\/admin\/people\?\$\{params\.toString\(\)\}/);
       assert.match(script, /startAngle/);
-      assert.match(script, /isAngleInRange/);
       assert.match(script, /describePieSlice\(60, 60, 56/);
     }
   });

@@ -92,10 +92,10 @@ public class DashboardFundRelationService {
 
     String personName = String.valueOf(person.getOrDefault("name", "人员")).trim();
     String personIdNumber = String.valueOf(person.getOrDefault("idNumber", "")).trim();
-    int columns = Math.max(1, Math.min(5, rows.size()));
+    int columns = Math.max(1, Math.min(4, rows.size()));
     int rowCount = rows.isEmpty() ? 1 : (int) Math.ceil(rows.size() / (double) columns);
-    int width = Math.max(760, columns * 170 + 140);
-    int height = Math.max(420, rowCount * 118 + 250);
+    int width = Math.max(980, columns * 320 + 280);
+    int height = Math.max(460, rowCount * 142 + 260);
     List<Map<String, Object>> nodes = new ArrayList<>();
     List<Map<String, Object>> edges = new ArrayList<>();
     nodes.add(graphNode("person", personName.isBlank() ? "人员" : personName, "当前人员", width / 2, height - 72, true));
@@ -107,8 +107,8 @@ public class DashboardFundRelationService {
       String nodeId = "up-" + index;
       int column = index % columns;
       int levelRow = index / columns;
-      int x = 100 + column * 170;
-      int y = 82 + levelRow * 118;
+      int x = 180 + column * 320;
+      int y = 92 + levelRow * 142;
       nodes.add(graphNode(nodeId, upstreamName, "上一层", x, y, false));
       edges.add(graphEdge("person", nodeId, amount, row.get("rowIndex"), x, y));
       index++;
@@ -173,17 +173,18 @@ public class DashboardFundRelationService {
         .collect(Collectors.groupingBy(GraphNodeDraft::layer, LinkedHashMap::new, Collectors.toCollection(ArrayList::new)));
     int maxCount = byLayer.values().stream().mapToInt(List::size).max().orElse(1);
     int maxLayer = byLayer.keySet().stream().mapToInt(Integer::intValue).max().orElse(0);
-    int width = Math.max(980, maxCount * 220 + 220);
-    int height = Math.max(420, (maxLayer + 1) * 130 + 120);
+    int width = Math.max(1240, maxCount * 340 + 360);
+    int height = Math.max(460, (maxLayer + 1) * 150 + 130);
 
     List<Map<String, Object>> nodes = new ArrayList<>();
     Map<String, GraphNodeDraft> positioned = new LinkedHashMap<>();
     byLayer.forEach((layer, layerNodes) -> {
-      int gap = width / (layerNodes.size() + 1);
       for (int index = 0; index < layerNodes.size(); index++) {
         GraphNodeDraft draft = layerNodes.get(index);
-        int x = gap * (index + 1);
-        int y = 78 + layer * 130;
+        int x = layerNodes.size() == 1
+            ? width / 2
+            : 180 + Math.round(index * ((width - 360) / (float) (layerNodes.size() - 1)));
+        int y = 86 + layer * 150;
         draft = draft.withPosition(x, y);
         positioned.put(draft.id(), draft);
         nodes.add(graphNode(draft.id(), displayName(draft), levelLabel(draft.layer()), x, y, draft.primary()));

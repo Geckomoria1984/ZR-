@@ -105,6 +105,7 @@ public class AdminExcelImportService {
     Map<String, Integer> groupCounts = new LinkedHashMap<>();
     Map<String, Map<String, Integer>> groupDistrictCounts = new LinkedHashMap<>();
     Map<String, Long> harbinCounts = new LinkedHashMap<>();
+    Map<String, Long> harbinFullCounts = new LinkedHashMap<>();
     Map<String, Long> provinceCounts = new LinkedHashMap<>();
     Map<String, Long> provinceFullCounts = new LinkedHashMap<>();
     Map<String, Long> outsideProvinceCounts = new LinkedHashMap<>();
@@ -126,12 +127,16 @@ public class AdminExcelImportService {
       if (!isHeilongjiangHiddenInvestor(person)) continue;
       String city = String.valueOf(person.getOrDefault("householdCity", ""));
       String district = String.valueOf(person.getOrDefault("householdDistrict", ""));
-      if (isHarbinCity(city) || isHarbinArea(district)) continue;
-      String provinceCity = dashboardArea(city);
-      if (isHeilongjiangNonHarbinCity(provinceCity)) {
-        provinceFullCounts.merge(provinceCity, 1L, Long::sum);
+      if (isHarbinCity(city) || isHarbinArea(district)) {
+        String area = dashboardArea(district);
+        harbinFullCounts.merge(isHarbinArea(area) ? area : "哈尔滨未填写", 1L, Long::sum);
       } else {
-        provinceFullCounts.merge("省内未填写", 1L, Long::sum);
+        String provinceCity = dashboardArea(city);
+        if (isHeilongjiangNonHarbinCity(provinceCity)) {
+          provinceFullCounts.merge(provinceCity, 1L, Long::sum);
+        } else {
+          provinceFullCounts.merge("省内未填写", 1L, Long::sum);
+        }
       }
     }
 
@@ -168,6 +173,7 @@ public class AdminExcelImportService {
     dashboard.put("excelColumns", headers);
     dashboard.put("regionStats", regionStats(harbinCounts, provinceCounts));
     dashboard.put("regionRows", regionRows(harbinCounts, provinceCounts));
+    dashboard.put("harbinRegionFullRows", harbinRegionRows(harbinFullCounts));
     dashboard.put("provinceCityFullRows", provinceCityRows(provinceFullCounts));
     dashboard.put("outsideProvinceRows", outsideProvinceRows(outsideProvinceCounts));
     dashboard.put("riskBars", riskBars(groupCounts));
@@ -206,7 +212,7 @@ public class AdminExcelImportService {
     String targetName = firstNonBlank(name);
     String targetId = firstNonBlank(idNumber);
 
-    Map<String, Object> primary = graphNode("primary", firstNonBlank(targetName, "当前人员"), targetId, "当前人员", "", "", 120, 180, true);
+    Map<String, Object> primary = graphNode("primary", firstNonBlank(targetName, "当前人员"), targetId, "当前人员", "", "", 210, 185, true);
     List<Map<String, Object>> nodes = new ArrayList<>();
     List<Map<String, Object>> edges = new ArrayList<>();
     List<Map<String, Object>> relatedRows = new ArrayList<>();
@@ -239,8 +245,8 @@ public class AdminExcelImportService {
       if (!relatedKey.isBlank()) seenRelated.put(relatedKey, true);
 
       String nodeId = "related-" + index;
-      int y = 86 + index * 132;
-      nodes.add(graphNode(nodeId, firstNonBlank(display.name(), "未填写"), display.idNumber(), relationType, display.phone(), display.occupation(), 560, y, false));
+      int y = 100 + index * 165;
+      nodes.add(graphNode(nodeId, firstNonBlank(display.name(), "未填写"), display.idNumber(), relationType, display.phone(), display.occupation(), 690, y, false));
       edges.add(Map.of("source", "primary", "target", nodeId, "relation", relationType, "rowIndex", index));
       relatedRows.add(Map.of(
           "name", firstNonBlank(display.name(), "未填写"),
@@ -252,7 +258,7 @@ public class AdminExcelImportService {
       index++;
     }
 
-    int height = Math.max(380, 150 + Math.max(1, index) * 132);
+    int height = Math.max(430, 175 + Math.max(1, index) * 165);
     primary.put("y", height / 2);
     return Map.of(
         "total", relatedRows.size(),
@@ -260,7 +266,7 @@ public class AdminExcelImportService {
         "summary", relatedRows.stream()
             .map(row -> firstNonBlank(String.valueOf(row.get("relation")), "关联人") + "：" + firstNonBlank(String.valueOf(row.get("name")), "未填写"))
             .toList(),
-        "graph", Map.of("nodes", nodes, "edges", edges, "width", 760, "height", height));
+        "graph", Map.of("nodes", nodes, "edges", edges, "width", 930, "height", height));
   }
 
   private List<Map<String, Object>> hiddenInvestorHeadersSnapshot() {
@@ -749,6 +755,14 @@ public class AdminExcelImportService {
   private List<List<Object>> provinceCityRows(Map<String, Long> provinceCounts) {
     return provinceCounts.entrySet().stream()
         .filter(entry -> isHeilongjiangNonHarbinCity(entry.getKey()) || "省内未填写".equals(entry.getKey()))
+        .sorted(this::compareRegionCountAsc)
+        .map(entry -> List.of((Object) entry.getKey(), (Object) entry.getValue()))
+        .toList();
+  }
+
+  private List<List<Object>> harbinRegionRows(Map<String, Long> harbinCounts) {
+    return harbinCounts.entrySet().stream()
+        .filter(entry -> isHarbinArea(entry.getKey()) || "哈尔滨未填写".equals(entry.getKey()))
         .sorted(this::compareRegionCountAsc)
         .map(entry -> List.of((Object) entry.getKey(), (Object) entry.getValue()))
         .toList();

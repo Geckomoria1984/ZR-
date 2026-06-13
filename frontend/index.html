@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>黑龙江省群体架构图</title>
     <link rel="stylesheet" href="/vendor/element-plus.css?v=local-20260608">
-    <link rel="stylesheet" href="/src/styles.css?v=relation-node-fields-20260612">
+    <link rel="stylesheet" href="/src/styles.css?v=fund-graph-scroll-start-20260613">
   </head>
   <body>
     <div id="app" v-cloak>
@@ -157,35 +157,27 @@
               </path>
             </svg>
           </article>
-          <article class="chart-card city-distribution-card">
+          <article
+            class="chart-card city-distribution-card province-city-card"
+            role="button"
+            tabindex="0"
+            @click="openCityDistrictStats"
+            @keyup.enter="openCityDistrictStats"
+            @keyup.space.prevent="openCityDistrictStats"
+          >
             <h3>本市区县分布</h3>
-            <div class="city-distribution-layout">
-              <svg
-                class="district-donut-svg city-distribution-pie"
-                viewBox="0 0 120 120"
-                role="img"
-                aria-label="本市区县分布饼图"
-                @click="handleCityDistrictPieClick"
+            <svg class="district-donut-svg province-city-pie" viewBox="0 0 120 120" role="img" aria-label="本市区县分布饼图">
+              <path
+                v-for="segment in cityDistrictSegments"
+                :key="`district-chart-${segment.bucket.key}`"
+                class="district-pie-segment"
+                :d="segment.path"
+                :fill="segment.color"
+                @click.stop="openCityDistrictStats"
               >
-                <path
-                  v-for="segment in cityDistrictSegments"
-                  :key="`district-chart-${segment.bucket.key}`"
-                  class="district-pie-segment"
-                  :d="segment.path"
-                  :fill="segment.color"
-                  @pointerdown.stop="openDrawerForRegion(segment.bucket.label)"
-                  @click.stop="openDrawerForRegion(segment.bucket.label)"
-                  @keyup.enter.space="openDrawerForRegion(segment.bucket.label)"
-                  role="button"
-                  tabindex="0"
-                >
-                  <title>{{ segment.bucket.label }} {{ segment.bucket.count }}人</title>
-                </path>
-                <circle class="city-distribution-center-disc" cx="60" cy="60" r="30"></circle>
-                <text class="city-distribution-center-label" x="60" y="56" text-anchor="middle">总计</text>
-                <text class="city-distribution-center-value" x="60" y="68" text-anchor="middle">{{ cityDistrictTotal }}人</text>
-              </svg>
-            </div>
+                <title>{{ segment.bucket.label }} {{ segment.bucket.count }}人</title>
+              </path>
+            </svg>
           </article>
           <article
             class="chart-card province-city-card"
@@ -336,6 +328,60 @@
               <b>{{ outsideProvincePercent(row) }}</b>
             </button>
             <p v-if="!outsideProvinceChartRows.length" class="empty-state">暂无省份数据</p>
+          </div>
+        </section>
+      </el-dialog>
+
+      <el-dialog v-model="cityDistrictStatsOpen" class="province-city-dialog" width="96vw" top="2vh">
+        <template #header>
+          <div class="province-city-head">
+            <h2>本市区县分布 <span>{{ cityDistrictTotal }}人</span></h2>
+            <p>哈尔滨全口径统计，点击区县查看人员列表</p>
+          </div>
+        </template>
+        <section class="province-city-layout">
+          <div class="province-city-pie-panel">
+            <svg class="district-donut-svg province-city-dialog-pie" viewBox="0 0 120 120" role="img" aria-label="本市区县分布详情饼图">
+              <path
+                v-for="segment in cityDistrictSegments"
+                :key="`city-district-dialog-${segment.bucket.key}`"
+                class="district-pie-segment"
+                :d="segment.path"
+                :fill="segment.color"
+                @click="openCityDistrictRegion(segment.bucket.label)"
+              >
+                <title>{{ segment.bucket.label }} {{ segment.bucket.count }}人</title>
+              </path>
+              <circle class="province-city-center-disc" cx="60" cy="60" r="30"></circle>
+              <text class="province-city-center-label" x="60" y="56" text-anchor="middle">总计</text>
+              <text class="province-city-center-value" x="60" y="68" text-anchor="middle">{{ cityDistrictTotal }}人</text>
+              <g
+                v-for="segment in cityDistrictLabelSegments"
+                :key="`city-district-label-${segment.bucket.key}`"
+                class="province-city-slice-label"
+                :transform="cityDistrictLabelTransform(segment)"
+              >
+                <text text-anchor="middle">
+                  <tspan x="0" dy="-0.25em">{{ segment.bucket.label }}</tspan>
+                  <tspan x="0" dy="1.15em">{{ cityDistrictPercent(segment.bucket) }}</tspan>
+                </text>
+              </g>
+            </svg>
+          </div>
+          <div class="province-city-list">
+            <button
+              v-for="row in cityDistrictRows"
+              :key="row.key"
+              class="province-city-row"
+              type="button"
+              @click="openCityDistrictRegion(row.label)"
+            >
+              <i :style="{ background: row.color }"></i>
+              <strong>{{ row.label }}</strong>
+              <span>{{ row.count }}人</span>
+              <b>{{ cityDistrictPercent(row) }}</b>
+            </button>
+            <p v-if="!cityDistrictRows.length" class="empty-state">暂无区县数据</p>
           </div>
         </section>
       </el-dialog>
@@ -520,10 +566,14 @@
                     :transform="fundNodeTransform(node)"
                     @click.stop="openGraphNodeProfile(node)"
                   >
-                    <rect x="-76" y="-31" width="152" height="62" rx="7"></rect>
-                    <text class="fund-node-name" x="0" y="-11">{{ displayFundNodeLabel(node) }}</text>
-                    <text v-if="fundNodeAmount(node)" class="fund-node-amount" x="0" y="5">{{ fundNodeAmount(node) }}</text>
-                    <text class="fund-node-level" x="0" y="21">{{ node.level }}</text>
+                    <rect x="-112" y="-42" width="224" height="84" rx="9"></rect>
+                    <foreignObject class="fund-node-foreign" x="-102" y="-39" width="204" height="78">
+                      <div class="fund-node-html" xmlns="http://www.w3.org/1999/xhtml">
+                        <div class="fund-node-html-line" :class="{ 'fund-node-amount': line.includes('投资金额') }" v-for="(line, lineIndex) in fundNodeLines(node)" :key="`preview-${node.id}-fund-line-${lineIndex}`">
+                          {{ line }}
+                        </div>
+                      </div>
+                    </foreignObject>
                   </g>
                   <text v-if="!fundGraphEdges.length && !fundRelationLoading" class="fund-empty-text" x="380" y="184">暂无资金关系图谱数据</text>
                   <text v-if="fundRelationLoading" class="fund-empty-text" x="380" y="184">资金图谱加载中</text>
@@ -555,7 +605,7 @@
           </div>
         </template>
         <div class="fund-graph-large">
-          <svg class="fund-graph-svg fund-graph-dynamic" :viewBox="fundGraphViewBox" role="img" aria-label="放大的资金关系图谱">
+          <svg class="fund-graph-svg fund-graph-dynamic" :style="fundGraphLargeSvgStyle" :viewBox="fundGraphViewBox" role="img" aria-label="放大的资金关系图谱">
             <defs>
               <marker id="fundArrowLarge" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                 <path d="M 0 0 L 10 5 L 0 10 z"></path>
@@ -572,10 +622,14 @@
               :transform="fundNodeTransform(node)"
               @click.stop="openGraphNodeProfile(node)"
             >
-              <rect x="-76" y="-31" width="152" height="62" rx="7"></rect>
-              <text class="fund-node-name" x="0" y="-11">{{ displayFundNodeLabel(node) }}</text>
-              <text v-if="fundNodeAmount(node)" class="fund-node-amount" x="0" y="5">{{ fundNodeAmount(node) }}</text>
-              <text class="fund-node-level" x="0" y="21">{{ node.level }}</text>
+              <rect x="-112" y="-42" width="224" height="84" rx="9"></rect>
+              <foreignObject class="fund-node-foreign" x="-102" y="-39" width="204" height="78">
+                <div class="fund-node-html" xmlns="http://www.w3.org/1999/xhtml">
+                  <div class="fund-node-html-line" :class="{ 'fund-node-amount': line.includes('投资金额') }" v-for="(line, lineIndex) in fundNodeLines(node)" :key="`${node.id}-fund-line-${lineIndex}`">
+                    {{ line }}
+                  </div>
+                </div>
+              </foreignObject>
             </g>
             <text v-if="!fundGraphEdges.length && !fundRelationLoading" class="fund-empty-text" x="380" y="184">暂无资金关系图谱数据</text>
             <text v-if="fundRelationLoading" class="fund-empty-text" x="380" y="184">资金图谱加载中</text>
@@ -603,19 +657,22 @@
             <g
               v-for="node in relationGraphNodes"
               :key="node.id"
-              class="fund-node fund-graph-node relation-graph-node"
+              class="fund-graph-node relation-graph-node"
               :class="{ 'fund-node-primary': node.primary }"
               :transform="fundNodeTransform(node)"
             >
-              <rect x="-98" y="-52" width="196" height="104" rx="9"></rect>
-              <text class="relation-node-lines" x="0" y="-34">
-                <tspan
+              <rect x="-136" y="-60" width="272" height="120" rx="14"></rect>
+              <foreignObject class="relation-node-foreign" x="-124" y="-51" width="248" height="102">
+                <div class="relation-node-html" xmlns="http://www.w3.org/1999/xhtml">
+                  <div
+                    class="relation-node-html-line"
                   v-for="(line, lineIndex) in relationNodeLines(node)"
                   :key="`${node.id}-line-${lineIndex}`"
-                  x="0"
-                  :dy="lineIndex === 0 ? 0 : 17"
-                >{{ line }}</tspan>
-              </text>
+                  >
+                    {{ line }}
+                  </div>
+                </div>
+              </foreignObject>
             </g>
             <text v-if="!relationGraphEdges.length && !relatedPersonLoading" class="fund-empty-text" x="380" y="184">暂无关联人图谱数据</text>
             <text v-if="relatedPersonLoading" class="fund-empty-text" x="380" y="184">关联人图谱加载中</text>
@@ -626,6 +683,6 @@
 
     <script src="/vendor/vue.global.prod.js?v=local-20260608"></script>
     <script src="/vendor/element-plus.full.min.js?v=local-20260608"></script>
-    <script type="module" src="/src/app.js?v=profile-risk-extra-fields-20260612"></script>
+    <script type="module" src="/src/app.js?v=fund-graph-scroll-start-20260613"></script>
   </body>
 </html>

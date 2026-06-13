@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>首页 UI 方案展示</title>
+    <link rel="stylesheet" href="/src/ui-options.css">
+  </head>
+  <body>
+    <main class="gallery">
+      <header class="gallery-head">
+        <p>首页 UI 方案选择</p>
+        <h1>黑龙江省群体架构图 · 5 套视觉方向</h1>
+        <span>以下均为脱敏示例稿，保留当前网站的信息结构：人员分类、重点人员、属地、金额、风险与统计。</span>
+        <nav class="option-nav" aria-label="方案快速跳转">
+          <a href="#command">1 指挥大屏</a>
+          <a href="#workbench">2 研判工作台</a>
+          <a href="#map">3 地图态势</a>
+          <a href="#civic">4 政务驾驶舱</a>
+          <a href="#alert">5 分级预警</a>
+        </nav>
+      </header>
+
+      <section id="command" class="option option-command" aria-label="方案一：省级指挥大屏">
+        <div class="option-copy">
+          <strong>方案一</strong>
+          <h2>省级指挥大屏风</h2>
+          <p>延续现有深蓝大屏气质，强化标题、主分组和数据氛围，适合会议室、汇报和大屏展示。</p>
+        </div>
+        <div class="screen command-screen">
+          <header class="screen-top">
+            <span>省级态势总览</span>
+            <h3>黑龙江省群体架构图 <b>34856人</b></h3>
+            <button>后台管理</button>
+          </header>
+          <div class="command-metrics">
+            <span>组织串联 21人</span>
+            <span>活跃响应 29人</span>
+            <span>一般参与 130人</span>
+            <span>密切关注 26人</span>
+          </div>
+          <div class="command-panels">
+            <article>
+              <div class="panel-title red">组织串联人员 21人</div>
+              <div class="people-row">
+                <div class="person red"><i>A</i><b>人员A 女 60岁</b><span>投资金额 400万</span><small>网上串联 · 到访21次</small></div>
+                <div class="person red"><i>B</i><b>人员B 男 60岁</b><span>投资金额 600万</span><small>现场组织 · 到访49次</small></div>
+                <div class="person red"><i>C</i><b>人员C 男 48岁</b><span>投资金额 300万</span><small>网上串联 · 到访3次</small></div>
+              </div>
+            </article>
+            <article>
+              <div class="panel-title amber">活跃响应人员 29人</div>
+              <div class="people-row">
+                <div class="person amber"><i>D</i><b>人员D 女 66岁</b><span>投资金额 500万</span><small>极端言论 · 到访18次</small></div>
+                <div class="person amber"><i>E</i><b>人员E 男 50岁</b><span>投资金额 300万</span><small>新增到场 · 到访2次</small></div>
+                <div class="person amber"><i>F</i><b>人员F 女 62岁</b><span>投资金额 800万</span><small>新增到场 · 到访4次</small></div>
+              </div>
+            </article>
+          </div>
+          <div class="command-bottom">
+            <div>户籍地分布</div><div>投资金额比例</div><div>职业分布</div><div>性别分布</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="workbench" class="option option-workbench" aria-label="方案二：公安研判工作台">
+        <div class="option-copy">
+          <strong>方案二</strong>
+          <h2>公安研判工作台风</h2>
+          <p>把首页从“看板”升级为“操作台”，左侧筛选、中间人员列表、右侧档案摘要，适合日常查询研判。</p>
+        </div>
+        <div class="screen workbench-screen">
+          <aside>
+            <h3>筛选研判</h3>
+            <label>人员类型</label>
+            <button class="active">组织串联</button><button>活跃响应</button><button>一般参与</button>
+            <label>属地单位</label>
+            <div class="select">全部派出所</div>
+            <label>风险等级</label>
+            <div class="risk-pills"><span>高</span><span>中</span><span>低</span></div>
+          </aside>
+          <main>
+            <header>
+              <div><span>总人数</span><b>34856</b></div>
+              <div><span>重点人员</span><b>50</b></div>
+              <div><span>今日更新</span><b>12</b></div>
+              <div><span>待核查</span><b>8</b></div>
+            </header>
+            <section class="case-list">
+              <article><i>A</i><div><b>人员A · 组织串联</b><span>投资400万 · 网上串联 · 南岗分局</span></div><em>高风险</em></article>
+              <article><i>B</i><div><b>人员B · 活跃响应</b><span>投资600万 · 现场组织 · 道里分局</span></div><em>高风险</em></article>
+              <article><i>C</i><div><b>人员C · 一般参与</b><span>投资80万 · 到场行为 · 香坊分局</span></div><em>关注</em></article>
+              <article><i>D</i><div><b>人员D · 密切关注</b><span>极端言论 · 群内响应 · 松北分局</span></div><em>待核查</em></article>
+            </section>
+          </main>
+          <aside class="profile">
+            <h3>人员档案摘要</h3>
+            <div class="avatar">A</div>
+            <b>人员A 女 60岁</b>
+            <p>投资金额 400万 · 网上串联 · 到访21次</p>
+            <dl><dt>属地单位</dt><dd>南岗分局船口派出所</dd><dt>处置建议</dt><dd>重点关注，持续跟进</dd></dl>
+          </aside>
+        </div>
+      </section>
+
+      <section id="map" class="option option-map" aria-label="方案三：地图态势联动">
+        <div class="option-copy">
+          <strong>方案三</strong>
+          <h2>地图态势联动风</h2>
+          <p>首页中心改为区域态势，突出“哪里多、哪里重、哪个属地压力大”，适合看全省分布。</p>
+        </div>
+        <div class="screen map-screen">
+          <header><h3>黑龙江省群体态势</h3><span>总人数 34856 · 重点 50 · 外市 18</span></header>
+          <aside class="rank">
+            <b>属地热度排行</b>
+            <p><span>南岗</span><i style="width: 92%"></i><em>19</em></p>
+            <p><span>道里</span><i style="width: 72%"></i><em>12</em></p>
+            <p><span>香坊</span><i style="width: 48%"></i><em>8</em></p>
+          </aside>
+          <div class="map-core">
+            <div class="map-shape"></div>
+            <span class="bubble b1">南岗 19</span>
+            <span class="bubble b2">道里 12</span>
+            <span class="bubble b3">外市 18</span>
+            <span class="bubble b4">松北 6</span>
+          </div>
+          <aside class="focus">
+            <b>重点人员</b>
+            <div><i>A</i><span>组织串联 · 21人</span></div>
+            <div><i>B</i><span>活跃响应 · 29人</span></div>
+            <div><i>C</i><span>密切关注 · 26人</span></div>
+          </aside>
+          <footer><span>投资金额</span><span>本市区县</span><span>省内外地市</span><span>各省户籍</span></footer>
+        </div>
+      </section>
+
+      <section id="civic" class="option option-civic" aria-label="方案四：白蓝政务驾驶舱">
+        <div class="option-copy">
+          <strong>方案四</strong>
+          <h2>白蓝政务驾驶舱风</h2>
+          <p>降低炫光，提升可读性和正式感，适合日常办公、长时间查看、打印汇报截图。</p>
+        </div>
+        <div class="screen civic-screen">
+          <header>
+            <div><span>黑龙江省群体架构图</span><b>34856人</b></div>
+            <button>后台管理</button>
+          </header>
+          <section class="civic-stats">
+            <article><span>组织串联</span><b>21</b><em>重点跟进</em></article>
+            <article><span>活跃响应</span><b>29</b><em>持续观察</em></article>
+            <article><span>一般参与</span><b>130</b><em>到场行为</em></article>
+            <article><span>密切关注</span><b>26</b><em>群内响应</em></article>
+          </section>
+          <section class="civic-main">
+            <div class="table">
+              <b>重点人员列表</b>
+              <p><span>人员A</span><span>组织串联</span><span>南岗</span><em>高</em></p>
+              <p><span>人员B</span><span>活跃响应</span><span>道里</span><em>高</em></p>
+              <p><span>人员C</span><span>一般参与</span><span>香坊</span><em>中</em></p>
+              <p><span>人员D</span><span>密切关注</span><span>松北</span><em>中</em></p>
+            </div>
+            <div class="chart-stack"><b>统计概览</b><i></i><i></i><i></i></div>
+          </section>
+        </div>
+      </section>
+
+      <section id="alert" class="option option-alert" aria-label="方案五：分级预警态势">
+        <div class="option-copy">
+          <strong>方案五</strong>
+          <h2>分级预警态势风</h2>
+          <p>从“人员分类”转向“风险优先”，首页直接告诉用户先看谁、先核查什么、哪个属地要跟进。</p>
+        </div>
+        <div class="screen alert-screen">
+          <header><h3>群体风险预警中心</h3><button>处置台账</button></header>
+          <section class="alert-strip">
+            <article><span>一级预警</span><b>12</b></article>
+            <article><span>二级预警</span><b>38</b></article>
+            <article><span>待核查</span><b>8</b></article>
+            <article><span>今日新增</span><b>5</b></article>
+          </section>
+          <main>
+            <div class="alert-funnel">
+              <b>风险分层</b>
+              <span class="level high">高风险 12</span>
+              <span class="level mid">中风险 38</span>
+              <span class="level low">一般关注 156</span>
+            </div>
+            <div class="alert-cases">
+              <b>优先处置人员</b>
+              <article><i>1</i><span>人员A · 网上串联 · 到访21次</span><em>立即关注</em></article>
+              <article><i>2</i><span>人员B · 现场组织 · 到访49次</span><em>重点核查</em></article>
+              <article><i>3</i><span>人员C · 极端言论 · 群内响应</span><em>持续跟进</em></article>
+            </div>
+            <div class="alert-duty">
+              <b>属地责任</b>
+              <p>南岗分局 <span>19</span></p>
+              <p>道里分局 <span>12</span></p>
+              <p>香坊分局 <span>8</span></p>
+            </div>
+          </main>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

@@ -306,6 +306,7 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         regionRows: fallbackRegionRows,
         riskBars: fallbackRiskBars,
         amountBuckets: [],
+        harbinRegionFullRows: [],
         provinceCityFullRows: [],
         outsideProvinceRows: [],
         excelColumns: [],
@@ -338,6 +339,7 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         regionTotal: 0,
         regionLoading: false,
         amountStatsOpen: false,
+        cityDistrictStatsOpen: false,
         provinceCityStatsOpen: false,
         outsideProvinceStatsOpen: false,
         selectedAmountBucket: null,
@@ -455,11 +457,33 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
       amountBucketStatsTotal() {
         return this.amountBuckets.reduce((sum, bucket) => sum + Number(bucket.count || 0), 0);
       },
+      cityDistrictRows() {
+        const sourceRows = this.harbinRegionFullRows.length ? this.harbinRegionFullRows : (this.regionRows[0] || []);
+        return sourceRows
+          .filter(([name]) => !this.isRegionTotalChip(name))
+          .map(([name, count], index) => ({
+            key: `${name}-${index}`,
+            label: String(name || '').trim(),
+            count: Number(count || 0),
+            color: REGION_CHART_COLORS[index % REGION_CHART_COLORS.length],
+          }))
+          .filter((row) => row.label && row.count > 0);
+      },
       cityDistrictSegments() {
-        return regionSliceSegments(this.regionRows[0] || []);
+        return regionSliceSegments(this.cityDistrictRows.map((row) => [row.label, row.count]));
       },
       cityDistrictTotal() {
-        return (this.regionRows[0] || []).reduce((sum, row) => sum + Number(row?.[1] || 0), 0);
+        return this.cityDistrictRows.reduce((sum, row) => sum + Number(row.count || 0), 0);
+      },
+      cityDistrictLabelSegments() {
+        const total = this.cityDistrictTotal || 0;
+        if (!total) return [];
+        const majorSegments = this.cityDistrictSegments
+          .filter((segment) => Number(segment.bucket?.count || 0) / total >= 0.08);
+        if (majorSegments.length) return majorSegments;
+        return [...this.cityDistrictSegments]
+          .sort((left, right) => Number(right.bucket?.count || 0) - Number(left.bucket?.count || 0))
+          .slice(0, 4);
       },
       provinceCityRows() {
         return (this.provinceCityFullRows.length ? this.provinceCityFullRows : (this.regionRows[1] || []))
@@ -507,8 +531,8 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
       fundGraphViewBox() {
         const graph = this.fundRelationGraph || {};
         const nodes = graph.nodes || [];
-        const maxX = nodes.reduce((value, node) => Math.max(value, Number(node.x || 0) + 60), Number(graph.width || 760));
-        const maxY = nodes.reduce((value, node) => Math.max(value, Number(node.y || 0) + 60), Number(graph.height || 380));
+        const maxX = nodes.reduce((value, node) => Math.max(value, Number(node.x || 0) + 170), Number(graph.width || 760));
+        const maxY = nodes.reduce((value, node) => Math.max(value, Number(node.y || 0) + 98), Number(graph.height || 380));
         return `0 0 ${Math.max(760, maxX)} ${Math.max(380, maxY)}`;
       },
       fundGraphNodes() {
@@ -517,12 +541,25 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
       fundGraphEdges() {
         return this.fundRelationGraph?.edges || [];
       },
+      fundGraphLargeSvgStyle() {
+        const graph = this.fundRelationGraph || {};
+        const width = Math.max(1180, Number(graph.width || 1180));
+        const height = Math.max(620, Number(graph.height || 620));
+        return {
+          width: `${width}px`,
+          height: `${height}px`,
+          minWidth: `${width}px`,
+          minHeight: `${height}px`,
+        };
+      },
       relationGraphViewBox() {
         const graph = this.relatedPersonGraph || {};
         const nodes = graph.nodes || [];
-        const maxX = nodes.reduce((value, node) => Math.max(value, Number(node.x || 0) + 90), Number(graph.width || 760));
-        const maxY = nodes.reduce((value, node) => Math.max(value, Number(node.y || 0) + 70), Number(graph.height || 380));
-        return `0 0 ${Math.max(760, maxX)} ${Math.max(380, maxY)}`;
+      const minX = nodes.reduce((value, node) => Math.min(value, Number(node.x || 0) - 156), 0);
+      const maxX = nodes.reduce((value, node) => Math.max(value, Number(node.x || 0) + 156), Number(graph.width || 960));
+      const maxY = nodes.reduce((value, node) => Math.max(value, Number(node.y || 0) + 70), Number(graph.height || 430));
+        const width = Math.max(960, maxX - Math.min(0, minX));
+        return `${Math.min(0, minX)} 0 ${width} ${Math.max(420, maxY)}`;
       },
       relationGraphNodes() {
         return this.relatedPersonGraph?.nodes || [];
@@ -566,6 +603,7 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
           this.groups = payload.groups || this.groups;
           this.regionStats = payload.regionStats || this.regionStats;
           this.regionRows = payload.regionRows || this.regionRows;
+          this.harbinRegionFullRows = payload.harbinRegionFullRows || [];
           this.provinceCityFullRows = payload.provinceCityFullRows || [];
           this.outsideProvinceRows = payload.outsideProvinceRows || [];
           this.riskBars = payload.riskBars || this.riskBars;
@@ -702,34 +740,6 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         this.drawerOpen = true;
         this.loadRegionPeople(province);
       },
-      handleCityDistrictPieClick(event) {
-        const segment = this.findCityDistrictSegmentByPoint(event);
-        if (!segment?.bucket?.label) return;
-        this.openDrawerForRegion(segment.bucket.label, segment.bucket);
-      },
-      findCityDistrictSegmentByPoint(event) {
-        const svg = event.currentTarget;
-        if (!(svg instanceof SVGElement)) return null;
-        if (!this.cityDistrictSegments.length) return null;
-
-        const rect = svg.getBoundingClientRect();
-        const width = rect.width || 0;
-        const height = rect.height || 0;
-        if (!width || !height) return null;
-
-        const x = (event.clientX - rect.left) / width * 120 - 60;
-        const y = (event.clientY - rect.top) / height * 120 - 60;
-        const distance = Math.hypot(x, y);
-        if (distance < 24 || distance > 52) return null;
-
-        const angle = (Math.atan2(y, x) * 180) / Math.PI;
-        const normalizedAngle = (angle + 450) % 360;
-        return this.cityDistrictSegments.find((segment) => isAngleInRange(
-          normalizedAngle,
-          segment.startAngle,
-          segment.endAngle,
-        ));
-      },
       async loadRegionPeople(region = this.selectedRegion, amountBucket = this.regionAmountBucket) {
         if (!region) return;
         this.regionLoading = true;
@@ -781,6 +791,21 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
       },
       openAmountStats() {
         this.amountStatsOpen = true;
+      },
+      openCityDistrictStats() {
+        this.cityDistrictStatsOpen = true;
+      },
+      openCityDistrictRegion(region) {
+        this.openDrawerForRegion(region, '', { fullScope: true });
+      },
+      cityDistrictPercent(row) {
+        const total = this.cityDistrictTotal || 0;
+        if (!total) return '0%';
+        const value = (Number(row?.count || 0) / total) * 100;
+        return `${value >= 10 ? value.toFixed(1) : value.toFixed(2)}%`;
+      },
+      cityDistrictLabelTransform(segment) {
+        return this.provinceCityLabelTransform(segment);
       },
       openProvinceCityStats() {
         this.provinceCityStatsOpen = true;
@@ -1077,6 +1102,16 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         const sourceEdge = this.fundGraphEdges.find((edge) => edge.source === node.id);
         return formatFundNodeAmount(sourceEdge?.amount);
       },
+      fundNodeLines(node) {
+        const lines = [];
+        const label = this.displayFundNodeLabel(node);
+        const amount = this.fundNodeAmount(node).replace(/：\s+/g, '：');
+        const level = String(node?.level || '').trim();
+        if (label) lines.push(label);
+        if (amount) lines.push(amount);
+        if (level) lines.push(level);
+        return lines.length ? lines : ['暂无信息'];
+      },
       fundNodeLevelRank(node) {
         return fundNodeLevelRank(node);
       },
@@ -1085,14 +1120,14 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         const target = this.fundGraphNodes.find((node) => node.id === edge.target);
         if (!source || !target) return '';
         const midY = Math.round(((source.y || 0) + (target.y || 0)) / 2);
-        return `M ${source.x} ${source.y - 28} C ${source.x} ${midY}, ${target.x} ${midY}, ${target.x} ${target.y + 34}`;
+        return `M ${source.x} ${source.y - 42} C ${source.x} ${midY}, ${target.x} ${midY}, ${target.x} ${target.y + 42}`;
       },
       relationEdgePath(edge) {
         const source = this.relationGraphNodes.find((node) => node.id === edge.source);
         const target = this.relationGraphNodes.find((node) => node.id === edge.target);
         if (!source || !target) return '';
         const midX = Math.round(((source.x || 0) + (target.x || 0)) / 2);
-        return `M ${source.x + 98} ${source.y} C ${midX} ${source.y}, ${midX} ${target.y}, ${target.x - 98} ${target.y}`;
+      return `M ${source.x + 136} ${source.y} C ${midX} ${source.y}, ${midX} ${target.y}, ${target.x - 136} ${target.y}`;
       },
       displayPersonName(personOrName) {
         const name = typeof personOrName === 'string' ? personOrName : personOrName?.name;
@@ -1135,12 +1170,17 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         const idNumber = this.displayPersonId(node?.idNumber);
         const phone = this.privacyMode ? maskPhoneTail(node?.phone) : String(node?.phone || '').trim();
         const occupation = String(node?.occupation || '').trim();
-        if (relation) lines.push(`关系：${relation}`);
-        if (name) lines.push(`姓名：${name}`);
-        if (idNumber) lines.push(`身份证号：${idNumber}`);
-        if (phone) lines.push(`电话：${phone}`);
-        if (occupation) lines.push(`职业：${occupation}`);
+        if (relation) lines.push(this.compactRelationLine(relation, 22));
+        if (name) lines.push(this.compactRelationLine(name, 22));
+        if (idNumber) lines.push(this.compactRelationLine(idNumber, 26));
+        if (phone) lines.push(this.compactRelationLine(phone, 26));
+        if (occupation) lines.push(this.compactRelationLine(occupation, 22));
         return lines.length ? lines : ['暂无信息'];
+      },
+      compactRelationLine(value, maxLength) {
+        const text = String(value || '').trim();
+        if (text.length <= maxLength) return text;
+        return `${text.slice(0, maxLength - 1)}…`;
       },
       togglePrivacy() {
         this.privacyMode = !this.privacyMode;
@@ -1271,16 +1311,6 @@ function regionSliceSegments(rows = []) {
 function normalizeAngle(value) {
   const normalized = value % 360;
   return normalized < 0 ? normalized + 360 : normalized;
-}
-
-function isAngleInRange(angle, startAngle = 0, endAngle = 0) {
-  const point = normalizeAngle(angle);
-  const start = normalizeAngle(startAngle);
-  const end = normalizeAngle(endAngle);
-
-  if (start === end) return true;
-  if (start < end) return point >= start && point < end;
-  return point >= start || point < end;
 }
 
 function formatFundNodeAmount(amount) {
