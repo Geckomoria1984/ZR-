@@ -1,5 +1,6 @@
 package com.example.groupdashboard;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -35,7 +36,9 @@ public class AdminFundRelationController {
   @GetMapping("/identity")
   public Map<String, Object> identityGraph(
       @RequestParam(value = "idNumber", required = false) String idNumber,
-      @RequestParam(value = "name", required = false) String name) {
+      @RequestParam(value = "name", required = false) String name,
+      @RequestParam(value = "visibleIdNumber", required = false) String visibleIdNumber,
+      @RequestParam(value = "visibleName", required = false) String visibleName) {
     Map<String, Object> person = peopleService.findByIdentity(idNumber, name).orElseGet(() -> Map.of(
         "id", "fund-" + String.valueOf(idNumber == null || idNumber.isBlank() ? name : idNumber),
         "name", String.valueOf(name == null || name.isBlank() ? "资金关系人" : name),
@@ -47,6 +50,9 @@ public class AdminFundRelationController {
         "amount", "未填写",
         "occupation", "未填写",
         "hiddenInvestor", "无"));
+    person = new LinkedHashMap<>(person);
+    person.put("visibleInvestorIdNumber", String.valueOf(visibleIdNumber == null ? "" : visibleIdNumber));
+    person.put("visibleInvestorName", String.valueOf(visibleName == null ? "" : visibleName));
     return fundRelationService.graphForIdentity(person);
   }
 }

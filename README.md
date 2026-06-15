@@ -6,6 +6,7 @@
 - `backend/`：Spring Boot 接口、Excel 导入、照片接口、资金关系图谱。
 - `tests/`：迁移和页面结构相关测试。
 - `docs/MIGRATION_CHECKLIST.md`：迁移清单和启动说明。
+- `deploy/centos7/`：CentOS 7 部署配置，包含 systemd、Nginx 和环境变量模板。
 
 不要从项目根目录启动静态服务。前端必须从 `frontend/` 目录启动：
 
@@ -25,4 +26,10 @@ mvn spring-boot:run
 
 ```text
 http://localhost:5174/admin.html
+```
+
+CentOS 7 部署请看：
+
+```text
+deploy/centos7/README.md
 ```

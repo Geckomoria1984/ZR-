@@ -3,9 +3,9 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>黑龙江省群体架构图</title>
+    <title>黑龙江省ZR群体架构图</title>
     <link rel="stylesheet" href="/vendor/element-plus.css?v=local-20260608">
-    <link rel="stylesheet" href="/src/styles.css?v=fund-graph-scroll-start-20260613">
+    <link rel="stylesheet" href="/src/styles.css?v=hidden-ui-option-06-white-20260615">
   </head>
   <body>
     <div id="app" v-cloak>
@@ -100,13 +100,15 @@
         </section>
 
         <section class="category-strip" aria-label="人员分类">
-          <el-button class="category-tile category-blue open-list" @click="openDrawer('general')">
-            <strong>{{ groups.general.title }} <span>{{ groups.general.count }}人</span></strong>
-            <small>有到场行为</small>
-          </el-button>
-          <el-button class="category-tile category-teal open-list" @click="openDrawer('watch')">
-            <strong>{{ groups.watch.title }} <span>{{ groups.watch.count }}人</span></strong>
-            <small>有过极端言论或意见领袖，未到场或仅群内响应</small>
+          <el-button
+            v-for="groupKey in categoryGroups"
+            :key="groupKey"
+            class="category-tile open-list"
+            :class="categoryTileClass(groupKey)"
+            @click="openDrawer(groupKey)"
+          >
+            <strong>{{ groups[groupKey].title }} <span>{{ groups[groupKey].count }}人</span></strong>
+            <small>{{ groups[groupKey].subtitle }}</small>
           </el-button>
         </section>
 
@@ -223,18 +225,95 @@
               </path>
             </svg>
           </article>
-          <article class="chart-card"><h3>职业分布</h3><div class="ring-lines"><span></span><span></span><span></span><span></span></div></article>
-          <article class="chart-card"><h3>全省性别分布</h3><div class="pie pie-gender"></div></article>
-          <article class="chart-card"><h3>库列管情况</h3><div class="pie pie-stock"></div></article>
-          <article class="chart-card">
+          <article
+            class="chart-card occupation-chart-card"
+            role="button"
+            tabindex="0"
+            @click="openOccupationStats"
+            @keyup.enter="openOccupationStats"
+            @keyup.space.prevent="openOccupationStats"
+          >
+            <h3>职业分布</h3>
+            <svg class="district-donut-svg occupation-pie" viewBox="0 0 120 120" role="img" aria-label="职业分布饼图">
+              <path
+                v-for="segment in occupationSegments"
+                :key="`occupation-chart-${segment.bucket.key}`"
+                class="district-pie-segment"
+                :d="segment.path"
+                :fill="segment.color"
+                @click.stop="openOccupationStats"
+              >
+                <title>{{ segment.bucket.label }} {{ segment.bucket.count }}人</title>
+              </path>
+              <circle class="occupation-center-disc" cx="60" cy="60" r="29"></circle>
+            </svg>
+          </article>
+          <article
+            class="chart-card gender-chart-card"
+            role="button"
+            tabindex="0"
+            @click="openGenderStats"
+            @keyup.enter="openGenderStats"
+            @keyup.space.prevent="openGenderStats"
+          >
+            <h3>全省性别分布</h3>
+            <svg class="district-donut-svg occupation-pie" viewBox="0 0 120 120" role="img" aria-label="全省性别分布饼图">
+              <path
+                v-for="segment in genderSegments"
+                :key="`gender-chart-${segment.bucket.key}`"
+                class="district-pie-segment"
+                :d="segment.path"
+                :fill="segment.color"
+                @click.stop="openGenderStats"
+              >
+                <title>{{ segment.bucket.label }} {{ segment.bucket.count }}人</title>
+              </path>
+            </svg>
+          </article>
+          <article
+            class="chart-card library-chart-card"
+            role="button"
+            tabindex="0"
+            @click="openLibraryStats"
+            @keyup.enter="openLibraryStats"
+            @keyup.space.prevent="openLibraryStats"
+          >
+            <h3>库列管情况</h3>
+            <svg class="district-donut-svg occupation-pie" viewBox="0 0 120 120" role="img" aria-label="库列管情况饼图">
+              <path
+                v-for="segment in libraryLevelSegments"
+                :key="`library-chart-${segment.bucket.key}`"
+                class="district-pie-segment"
+                :d="segment.path"
+                :fill="segment.color"
+                @click.stop="openLibraryStats"
+              >
+                <title>{{ segment.bucket.label }} {{ segment.bucket.count }}人</title>
+              </path>
+            </svg>
+          </article>
+          <article
+            class="chart-card clinic-chart-card"
+            role="button"
+            tabindex="0"
+            @click="openClinicStats"
+            @keyup.enter="openClinicStats"
+            @keyup.space.prevent="openClinicStats"
+          >
             <h3>门诊就诊</h3>
-            <div class="radial-bars">
-              <span
-                v-for="(value, index) in clinicBars"
-                :key="index"
-                :style="{ '--angle': `${index * 12}deg`, '--size': `${value}px`, '--bar-color': `hsl(${190 + index * 7} 86% 62%)` }"
-              ></span>
-            </div>
+            <svg class="district-donut-svg occupation-pie clinic-pie" viewBox="0 0 120 120" role="img" aria-label="门诊科室分布饼图">
+              <path
+                v-for="segment in clinicDepartmentSegments"
+                :key="`clinic-chart-${segment.bucket.key}`"
+                class="district-pie-segment"
+                :d="segment.path"
+                :fill="segment.color"
+                @click.stop="openClinicStats"
+              >
+                <title>{{ segment.bucket.label }} {{ segment.bucket.count }}次</title>
+              </path>
+              <circle class="occupation-center-disc" cx="60" cy="60" r="29"></circle>
+            </svg>
           </article>
         </section>
       </main>
@@ -328,6 +407,176 @@
               <b>{{ outsideProvincePercent(row) }}</b>
             </button>
             <p v-if="!outsideProvinceChartRows.length" class="empty-state">暂无省份数据</p>
+          </div>
+        </section>
+      </el-dialog>
+
+      <el-dialog v-model="occupationStatsOpen" class="province-city-dialog occupation-dialog" width="92vw" top="3vh">
+        <template #header>
+          <div class="province-city-head">
+            <h2>职业分布 <span>{{ occupationTotal }}人</span></h2>
+            <p>按数据库人员职业字段统计，仅展示职业类别、人数和占比</p>
+          </div>
+        </template>
+        <section class="province-city-layout occupation-layout">
+          <div class="province-city-pie-panel">
+            <svg class="district-donut-svg province-city-dialog-pie occupation-dialog-pie" viewBox="0 0 120 120" role="img" aria-label="职业分布详情饼图">
+              <path
+                v-for="segment in occupationSegments"
+                :key="`occupation-dialog-${segment.bucket.key}`"
+                class="district-pie-segment"
+                :d="segment.path"
+                :fill="segment.color"
+              >
+                <title>{{ segment.bucket.label }} {{ segment.bucket.count }}人</title>
+              </path>
+              <circle class="province-city-center-disc" cx="60" cy="60" r="30"></circle>
+              <text class="province-city-center-label" x="60" y="56" text-anchor="middle">总计</text>
+              <text class="province-city-center-value" x="60" y="68" text-anchor="middle">{{ occupationTotal }}人</text>
+              <g
+                v-for="segment in occupationLabelSegments"
+                :key="`occupation-label-${segment.bucket.key}`"
+                class="province-city-slice-label"
+                :transform="occupationLabelTransform(segment)"
+              >
+                <text text-anchor="middle">
+                  <tspan x="0" dy="-0.25em">{{ segment.bucket.label }}</tspan>
+                  <tspan x="0" dy="1.15em">{{ occupationPercent(segment.bucket) }}</tspan>
+                </text>
+              </g>
+            </svg>
+          </div>
+          <div class="province-city-list occupation-list">
+            <div
+              v-for="row in occupationChartRows"
+              :key="row.key"
+              class="province-city-row occupation-row"
+            >
+              <i :style="{ background: row.color }"></i>
+              <strong>{{ row.label }}</strong>
+              <span>{{ row.count }}人</span>
+              <b>{{ occupationPercent(row) }}</b>
+            </div>
+            <p v-if="!occupationChartRows.length" class="empty-state">暂无职业统计数据</p>
+          </div>
+        </section>
+      </el-dialog>
+
+      <el-dialog v-model="genderStatsOpen" class="province-city-dialog occupation-dialog" width="88vw" top="4vh">
+        <template #header>
+          <div class="province-city-head">
+            <h2>全省性别分布 <span>{{ genderTotal }}人</span></h2>
+            <p>按数据库人员性别字段统计，仅展示性别、人数和占比</p>
+          </div>
+        </template>
+        <section class="province-city-layout occupation-layout">
+          <div class="province-city-pie-panel">
+            <svg class="district-donut-svg province-city-dialog-pie occupation-dialog-pie" viewBox="0 0 120 120" role="img" aria-label="性别分布详情饼图">
+              <path
+                v-for="segment in genderSegments"
+                :key="`gender-dialog-${segment.bucket.key}`"
+                class="district-pie-segment"
+                :d="segment.path"
+                :fill="segment.color"
+              >
+                <title>{{ segment.bucket.label }} {{ segment.bucket.count }}人</title>
+              </path>
+              <circle class="province-city-center-disc" cx="60" cy="60" r="30"></circle>
+              <text class="province-city-center-label" x="60" y="56" text-anchor="middle">总计</text>
+              <text class="province-city-center-value" x="60" y="68" text-anchor="middle">{{ genderTotal }}人</text>
+            </svg>
+          </div>
+          <div class="province-city-list occupation-list">
+            <div v-for="row in genderChartRows" :key="row.key" class="province-city-row occupation-row">
+              <i :style="{ background: row.color }"></i>
+              <strong>{{ row.label }}</strong>
+              <span>{{ row.count }}人</span>
+              <b>{{ genderPercent(row) }}</b>
+            </div>
+            <p v-if="!genderChartRows.length" class="empty-state">暂无性别统计数据</p>
+          </div>
+        </section>
+      </el-dialog>
+
+      <el-dialog v-model="libraryStatsOpen" class="province-city-dialog occupation-dialog" width="88vw" top="4vh">
+        <template #header>
+          <div class="province-city-head">
+            <h2>库列管等级分布 <span>{{ libraryLevelTotal }}人</span></h2>
+            <p>只统计在库列管中含 C级、D级 的人员，未标等级人员不纳入统计</p>
+          </div>
+        </template>
+        <section class="province-city-layout occupation-layout">
+          <div class="province-city-pie-panel">
+            <svg class="district-donut-svg province-city-dialog-pie occupation-dialog-pie" viewBox="0 0 120 120" role="img" aria-label="库列管等级分布详情饼图">
+              <path
+                v-for="segment in libraryLevelSegments"
+                :key="`library-dialog-${segment.bucket.key}`"
+                class="district-pie-segment"
+                :d="segment.path"
+                :fill="segment.color"
+              >
+                <title>{{ segment.bucket.label }} {{ segment.bucket.count }}人</title>
+              </path>
+              <circle class="province-city-center-disc" cx="60" cy="60" r="30"></circle>
+              <text class="province-city-center-label" x="60" y="56" text-anchor="middle">总计</text>
+              <text class="province-city-center-value" x="60" y="68" text-anchor="middle">{{ libraryLevelTotal }}人</text>
+            </svg>
+          </div>
+          <div class="province-city-list occupation-list">
+            <div v-for="row in libraryLevelChartRows" :key="row.key" class="province-city-row occupation-row">
+              <i :style="{ background: row.color }"></i>
+              <strong>{{ row.label }}</strong>
+              <span>{{ row.count }}人</span>
+              <b>{{ libraryLevelPercent(row) }}</b>
+            </div>
+            <p v-if="!libraryLevelChartRows.length" class="empty-state">暂无 C级、D级 在库列管统计数据</p>
+          </div>
+        </section>
+      </el-dialog>
+
+      <el-dialog v-model="clinicStatsOpen" class="province-city-dialog occupation-dialog" width="92vw" top="3vh">
+        <template #header>
+          <div class="province-city-head">
+            <h2>门诊科室分布 <span>{{ clinicDepartmentTotal }}次</span></h2>
+            <p>只统计就诊信息字段中的门诊记录，住院记录不纳入统计</p>
+          </div>
+        </template>
+        <section class="province-city-layout occupation-layout">
+          <div class="province-city-pie-panel">
+            <svg class="district-donut-svg province-city-dialog-pie occupation-dialog-pie" viewBox="0 0 120 120" role="img" aria-label="门诊科室分布详情饼图">
+              <path
+                v-for="segment in clinicDepartmentSegments"
+                :key="`clinic-dialog-${segment.bucket.key}`"
+                class="district-pie-segment"
+                :d="segment.path"
+                :fill="segment.color"
+              >
+                <title>{{ segment.bucket.label }} {{ segment.bucket.count }}次</title>
+              </path>
+              <circle class="province-city-center-disc" cx="60" cy="60" r="30"></circle>
+              <text class="province-city-center-label" x="60" y="56" text-anchor="middle">门诊</text>
+              <text class="province-city-center-value" x="60" y="68" text-anchor="middle">{{ clinicDepartmentTotal }}次</text>
+              <g
+                v-for="segment in clinicDepartmentLabelSegments"
+                :key="`clinic-label-${segment.bucket.key}`"
+                class="province-city-slice-label"
+                :transform="clinicDepartmentLabelTransform(segment)"
+              >
+                <text text-anchor="middle">
+                  <tspan x="0" dy="-0.25em">{{ segment.bucket.label }}</tspan>
+                  <tspan x="0" dy="1.15em">{{ clinicDepartmentPercent(segment.bucket) }}</tspan>
+                </text>
+              </g>
+            </svg>
+          </div>
+          <div class="province-city-list occupation-list">
+            <div v-for="row in clinicDepartmentChartRows" :key="row.key" class="province-city-row occupation-row">
+              <i :style="{ background: row.color }"></i>
+              <strong>{{ row.label }}</strong>
+              <span>{{ row.count }}次</span>
+              <b>{{ clinicDepartmentPercent(row) }}</b>
+            </div>
+            <p v-if="!clinicDepartmentChartRows.length" class="empty-state">暂无门诊科室统计数据</p>
           </div>
         </section>
       </el-dialog>
@@ -589,8 +838,9 @@
                 :class="{ 'detail-line-wide': row.wide, 'detail-line-medical': row.label === '就诊情况' }"
               >
                 <span class="detail-line-icon">{{ row.icon }}</span>
-                <span class="detail-label">{{ row.label }}：</span>
-                <strong :class="{ highlight: row.highlight, sensitive: row.label.includes('金额') || row.label.includes('投资') }">{{ displayDetailValue(row) }}</strong>
+                <span class="detail-label">{{ row.label }}</span>
+                <span class="detail-colon">：</span>
+                <strong :class="{ highlight: row.highlight, sensitive: isSensitiveDetail(row) }">{{ displayDetailValue(row) }}</strong>
               </div>
             </div>
           </div>
@@ -683,6 +933,6 @@
 
     <script src="/vendor/vue.global.prod.js?v=local-20260608"></script>
     <script src="/vendor/element-plus.full.min.js?v=local-20260608"></script>
-    <script type="module" src="/src/app.js?v=fund-graph-scroll-start-20260613"></script>
+    <script type="module" src="/src/app.js?v=visible-zr-title-1041-20260615"></script>
   </body>
 </html>

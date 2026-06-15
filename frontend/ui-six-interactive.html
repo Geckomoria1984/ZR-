@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>6套互动首页 UI 方案</title>
+    <link rel="stylesheet" href="/src/ui-six-interactive.css">
+  </head>
+  <body>
+    <div id="six-ui-app" class="six-app">
+      <header class="six-top">
+        <div>
+          <p>可互动首页方案</p>
+          <h1>黑龙江省群体架构图 · 6 套 UI</h1>
+        </div>
+        <nav class="concept-tabs" aria-label="UI 方案切换"></nav>
+      </header>
+
+      <main class="concept-stage" aria-live="polite"></main>
+
+      <aside class="profile-panel" aria-hidden="true">
+        <button class="panel-close" type="button" aria-label="关闭人员详情">×</button>
+        <div class="profile-body"></div>
+      </aside>
+    </div>
+
+    <script type="module" src="/src/ui-six-interactive.js"></script>
+  </body>
+</html>

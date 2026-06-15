@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>隐名投资人页面 UI 方案选择</title>
+    <style>
+      :root {
+        --ink: #06142f;
+        --navy: #061b3d;
+        --deep: #031127;
+        --cyan: #55dfff;
+        --gold: #ffd166;
+        --red: #ff5263;
+        --green: #42d69b;
+        --violet: #8578ff;
+        --card: rgba(255, 255, 255, 0.1);
+        --line: rgba(142, 218, 255, 0.26);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 1260px;
+        color: #f5fbff;
+        font-family: "Microsoft YaHei", "PingFang SC", "Noto Sans SC", Arial, sans-serif;
+        background:
+          radial-gradient(circle at 18% 8%, rgba(86, 223, 255, 0.18), transparent 28rem),
+          radial-gradient(circle at 92% 22%, rgba(255, 209, 102, 0.1), transparent 30rem),
+          linear-gradient(180deg, #02091c, #062a5a 46%, #031327);
+      }
+
+      .selector-shell {
+        padding: 26px 30px 60px;
+      }
+
+      .selector-head {
+        position: sticky;
+        z-index: 20;
+        top: 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: -26px -30px 24px;
+        padding: 18px 34px;
+        background: rgba(3, 12, 32, 0.92);
+        border-bottom: 1px solid rgba(103, 207, 255, 0.32);
+        backdrop-filter: blur(14px);
+      }
+
+      .selector-head h1 {
+        margin: 0;
+        font-size: 28px;
+        letter-spacing: 0.04em;
+      }
+
+      .selector-head span {
+        color: var(--gold);
+      }
+
+      .selector-note {
+        margin: 0;
+        color: #bfe8ff;
+        font-size: 15px;
+      }
+
+      .option {
+        overflow: hidden;
+        margin: 0 auto 34px;
+        max-width: 1540px;
+        min-height: 760px;
+        border-radius: 26px;
+        border: 1px solid rgba(120, 213, 255, 0.34);
+        box-shadow: 0 28px 80px rgba(0, 8, 30, 0.46);
+      }
+
+      .option-label {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        min-height: 58px;
+        padding: 0 24px;
+        background: rgba(255, 255, 255, 0.08);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      }
+
+      .option-label b {
+        font-size: 22px;
+      }
+
+      .option-label small {
+        color: #b8e6ff;
+        font-size: 14px;
+      }
+
+      .screen {
+        min-height: 702px;
+        padding: 26px 30px 30px;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 24px;
+        margin-bottom: 20px;
+      }
+
+      .hero h2 {
+        margin: 0;
+        font-size: 36px;
+        line-height: 1.1;
+      }
+
+      .hero h2 span {
+        color: var(--red);
+      }
+
+      .hero p {
+        margin: 8px 0 0;
+        color: #b9dfff;
+        font-size: 15px;
+      }
+
+      .hero-actions {
+        display: flex;
+        gap: 10px;
+      }
+
+      .chip {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 32px;
+        padding: 0 14px;
+        border-radius: 999px;
+        color: #f6fbff;
+        background: rgba(255, 255, 255, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        font-weight: 800;
+      }
+
+      .metric-row {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+
+      .metric {
+        min-height: 86px;
+        padding: 16px;
+        border-radius: 18px;
+        background: var(--card);
+        border: 1px solid var(--line);
+      }
+
+      .metric small {
+        display: block;
+        color: #afdcff;
+        font-size: 13px;
+      }
+
+      .metric b {
+        display: block;
+        margin-top: 8px;
+        color: #fff;
+        font-size: 26px;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 1.45fr 0.95fr;
+        gap: 18px;
+      }
+
+      .people-grid {
+        display: grid;
+        gap: 14px;
+      }
+
+      .group {
+        padding: 16px;
+        border-radius: 22px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .group-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .group-head h3 {
+        margin: 0;
+        font-size: 24px;
+      }
+
+      .group-head h3 span {
+        color: var(--gold);
+      }
+
+      .person-row {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .person-card {
+        display: grid;
+        grid-template-columns: 72px 1fr;
+        gap: 12px;
+        min-height: 120px;
+        padding: 12px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+      }
+
+      .avatar {
+        display: grid;
+        place-items: center;
+        width: 72px;
+        height: 92px;
+        border-radius: 14px;
+        color: #0a2348;
+        background: linear-gradient(145deg, #ffe1b9, #f7fbff 48%, #164a78 49%);
+        border: 3px solid #ffd166;
+        font-size: 23px;
+        font-weight: 900;
+      }
+
+      .person-card strong {
+        display: block;
+        color: #fff;
+        font-size: 19px;
+      }
+
+      .person-card span {
+        display: block;
+        margin-top: 4px;
+        color: #cfeaff;
+        font-size: 13px;
+        line-height: 1.25;
+      }
+
+      .side {
+        display: grid;
+        gap: 14px;
+      }
+
+      .panel {
+        padding: 16px;
+        border-radius: 22px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .panel h3 {
+        margin: 0 0 12px;
+        padding-left: 10px;
+        border-left: 5px solid var(--cyan);
+        font-size: 22px;
+      }
+
+      .donut {
+        width: 188px;
+        height: 188px;
+        margin: 0 auto;
+        border-radius: 50%;
+        background:
+          radial-gradient(circle, transparent 0 43%, #081a3a 44% 58%, transparent 59%),
+          conic-gradient(#7568d8 0 36%, #35d38a 36% 55%, #ff715f 55% 68%, #ffd166 68% 78%, #28c9d9 78% 100%);
+        box-shadow: 0 0 30px rgba(84, 215, 255, 0.24);
+      }
+
+      .rank-list {
+        display: grid;
+        gap: 8px;
+      }
+
+      .rank-list span {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 10px;
+        padding: 9px 12px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.1);
+        color: #eaf8ff;
+        font-weight: 800;
+      }
+
+      .option-1 .screen {
+        background:
+          linear-gradient(rgba(93, 193, 255, 0.09) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(93, 193, 255, 0.09) 1px, transparent 1px),
+          radial-gradient(circle at 50% 40%, rgba(46, 151, 255, 0.22), transparent 34rem),
+          #061b3d;
+        background-size: 28px 28px, 28px 28px, auto, auto;
+      }
+
+      .option-1 .group.red {
+        background: linear-gradient(135deg, rgba(255, 82, 99, 0.72), rgba(176, 44, 67, 0.58));
+      }
+
+      .option-1 .group.yellow {
+        background: linear-gradient(135deg, rgba(255, 209, 102, 0.82), rgba(139, 104, 34, 0.45));
+      }
+
+      .option-2 .screen {
+        color: #21314a;
+        background: linear-gradient(145deg, #eef7fb, #d8ebf5);
+      }
+
+      .option-2 .hero h2,
+      .option-2 .group-head h3,
+      .option-2 .panel h3,
+      .option-2 .person-card strong,
+      .option-2 .metric b,
+      .option-2 .rank-list span {
+        color: #17263d;
+      }
+
+      .option-2 .hero p,
+      .option-2 .metric small,
+      .option-2 .person-card span {
+        color: #587089;
+      }
+
+      .option-2 .group,
+      .option-2 .panel,
+      .option-2 .metric,
+      .option-2 .person-card {
+        background: rgba(255, 255, 255, 0.72);
+        border-color: rgba(74, 118, 153, 0.16);
+        box-shadow: 0 16px 34px rgba(23, 49, 84, 0.12);
+      }
+
+      .option-2 .rank-list span {
+        background: #edf5fa;
+      }
+
+      .option-3 .screen {
+        background:
+          radial-gradient(circle at 12% 8%, rgba(86, 223, 255, 0.2), transparent 24rem),
+          linear-gradient(145deg, #071225, #10294d 46%, #081528);
+      }
+
+      .option-3 .metric,
+      .option-3 .group,
+      .option-3 .panel {
+        border-color: rgba(88, 247, 194, 0.28);
+        background: rgba(11, 36, 58, 0.74);
+      }
+
+      .option-3 .person-card {
+        background: linear-gradient(135deg, rgba(24, 196, 145, 0.28), rgba(54, 111, 210, 0.16));
+      }
+
+      .option-4 .screen {
+        background:
+          radial-gradient(circle at 50% 0%, rgba(255, 209, 102, 0.18), transparent 28rem),
+          linear-gradient(145deg, #080909, #19212a 52%, #050607);
+      }
+
+      .option-4 .metric,
+      .option-4 .group,
+      .option-4 .panel,
+      .option-4 .person-card {
+        background: linear-gradient(145deg, rgba(255, 209, 102, 0.1), rgba(255, 255, 255, 0.05));
+        border-color: rgba(255, 209, 102, 0.34);
+      }
+
+      .option-4 .panel h3 {
+        border-left-color: var(--gold);
+      }
+
+      .option-5 .screen {
+        background:
+          radial-gradient(circle at 76% 42%, rgba(44, 200, 255, 0.22), transparent 25rem),
+          linear-gradient(rgba(95, 210, 255, 0.09) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(95, 210, 255, 0.09) 1px, transparent 1px),
+          #041a34;
+        background-size: auto, 34px 34px, 34px 34px, auto;
+      }
+
+      .option-5 .layout {
+        grid-template-columns: 1fr 1.15fr;
+      }
+
+      .map-card {
+        min-height: 318px;
+        border-radius: 26px;
+        border: 1px solid rgba(92, 223, 255, 0.34);
+        background:
+          radial-gradient(circle at 46% 50%, rgba(85, 223, 255, 0.52) 0 2px, transparent 3px),
+          radial-gradient(circle at 36% 36%, rgba(255, 209, 102, 0.8) 0 4px, transparent 5px),
+          radial-gradient(circle at 61% 42%, rgba(255, 82, 99, 0.8) 0 4px, transparent 5px),
+          radial-gradient(circle at 52% 63%, rgba(66, 214, 155, 0.82) 0 5px, transparent 6px),
+          linear-gradient(135deg, rgba(16, 76, 126, 0.66), rgba(4, 18, 46, 0.86));
+      }
+
+      .option-6 .screen {
+        color: #102033;
+        background: #f5f8fb;
+      }
+
+      .option-6 .hero h2,
+      .option-6 .group-head h3,
+      .option-6 .panel h3,
+      .option-6 .metric b,
+      .option-6 .person-card strong,
+      .option-6 .rank-list span {
+        color: #102033;
+      }
+
+      .option-6 .hero p,
+      .option-6 .metric small,
+      .option-6 .person-card span {
+        color: #617184;
+      }
+
+      .option-6 .metric,
+      .option-6 .group,
+      .option-6 .panel {
+        background: #fff;
+        border-color: #dce7f0;
+        box-shadow: none;
+      }
+
+      .option-6 .person-card,
+      .option-6 .rank-list span {
+        color: #102033;
+        background: #f5f8fb;
+        border-color: #dce7f0;
+      }
+
+      .option-7 .screen {
+        background:
+          radial-gradient(circle at 15% 8%, rgba(255, 82, 99, 0.24), transparent 25rem),
+          radial-gradient(circle at 90% 20%, rgba(64, 180, 255, 0.22), transparent 25rem),
+          linear-gradient(145deg, #060f27, #071a42 58%, #060b1a);
+      }
+
+      .option-7 .group.red {
+        border-color: rgba(255, 82, 99, 0.58);
+        background: linear-gradient(135deg, rgba(255, 82, 99, 0.28), rgba(255, 82, 99, 0.08));
+      }
+
+      .option-7 .group.yellow {
+        border-color: rgba(255, 209, 102, 0.5);
+        background: linear-gradient(135deg, rgba(255, 209, 102, 0.22), rgba(60, 130, 255, 0.08));
+      }
+
+      .option-7 .person-card {
+        background: rgba(255, 255, 255, 0.08);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="selector-shell">
+      <header class="selector-head">
+        <h1>隐名投资人展示页 <span>7 套 UI 方案</span></h1>
+        <p class="selector-note">先选风格编号，选中后再迁移到正式页面</p>
+      </header>
+
+      <section class="option option-1">
+        <div class="option-label"><b>01 公安指挥大屏风</b><small>深蓝网格、风险等级清晰、适合会议大屏</small></div>
+        <div class="screen">
+          <div class="hero"><div><h2>隐名投资人架构图 <span>69735人</span></h2><p>黑龙江省隐名投资人态势监测 · 数据来自 H2 数据库</p></div><div class="hero-actions"><span class="chip">显名首页</span><span class="chip">后台管理</span><span class="chip">一键隐藏</span></div></div>
+          <div class="metric-row"><div class="metric"><small>一级隐名投资人</small><b>2人</b></div><div class="metric"><small>二级隐名投资人</small><b>2人</b></div><div class="metric"><small>三级隐名投资人</small><b>21人</b></div><div class="metric"><small>四级隐名投资人</small><b>4人</b></div><div class="metric"><small>黑龙江省内</small><b>3259人</b></div></div>
+          <div class="layout"><div class="people-grid"><div class="group red"><div class="group-head"><h3>一级隐名投资人 <span>2人</span></h3><span class="chip">一级风险</span></div><div class="person-row"><div class="person-card"><i class="avatar">杨</i><div><strong>杨馨嘉 女 47岁</strong><span>投资金额：550万</span><span>突出行为：场所上访40次以上</span><span>属地：道里分局爱建路派出所</span></div></div><div class="person-card"><i class="avatar">赵</i><div><strong>赵瑞华 女 66岁</strong><span>投资金额：83.56万</span><span>突出行为：网络发声挑头</span><span>属地：道里分局兆麟派出所</span></div></div></div></div><div class="group yellow"><div class="group-head"><h3>二级隐名投资人 <span>2人</span></h3><span class="chip">二级风险</span></div><div class="person-row"><div class="person-card"><i class="avatar">孙</i><div><strong>孙家龙 男 57岁</strong><span>投资金额：1.7万</span><span>突出行为：场所上访20次以上40次以下</span><span>属地：香坊分局建筑街派出所</span></div></div><div class="person-card"><i class="avatar">李</i><div><strong>李晓丹 女 57岁</strong><span>投资金额：9万</span><span>突出行为：场所上访20次以上40次以下</span><span>属地：南岗分局巴山派出所</span></div></div></div></div></div><aside class="side"><div class="panel"><h3>各省人员户籍分布</h3><div class="donut"></div></div><div class="panel"><h3>重点地区排行</h3><div class="rank-list"><span>道里 <b>554人</b></span><span>南岗 <b>661人</b></span><span>香坊 <b>298人</b></span><span>大庆 <b>195人</b></span></div></div></aside></div>
+        </div>
+      </section>
+
+      <section class="option option-2">
+        <div class="option-label"><b>02 情报档案风</b><small>浅色档案、清爽正式、个人信息更像卷宗</small></div>
+        <div class="screen">
+          <div class="hero"><div><h2>隐名投资人信息档案 <span>69735人</span></h2><p>以人员档案为主，减少大屏装饰，适合日常研判使用</p></div><div class="hero-actions"><span class="chip">显名首页</span><span class="chip">后台管理</span></div></div>
+          <div class="metric-row"><div class="metric"><small>一级</small><b>2人</b></div><div class="metric"><small>二级</small><b>2人</b></div><div class="metric"><small>三级</small><b>21人</b></div><div class="metric"><small>四级</small><b>4人</b></div><div class="metric"><small>省内人员</small><b>3259人</b></div></div>
+          <div class="layout"><div class="people-grid"><div class="group red"><div class="group-head"><h3>一级风险档案 <span>2人</span></h3><span class="chip">重点核查</span></div><div class="person-row"><div class="person-card"><i class="avatar">杨</i><div><strong>杨馨嘉 女 47岁</strong><span>投资金额：550万</span><span>定级原因：场所上访40次以上</span><span>显性对应人：姓名/身份证/电话</span></div></div><div class="person-card"><i class="avatar">赵</i><div><strong>赵瑞华 女 66岁</strong><span>投资金额：83.56万</span><span>定级原因：网络发声挑头</span><span>显性对应人：姓名/身份证/电话</span></div></div></div></div><div class="group yellow"><div class="group-head"><h3>二级风险档案 <span>2人</span></h3><span class="chip">持续关注</span></div><div class="person-row"><div class="person-card"><i class="avatar">孙</i><div><strong>孙家龙 男 57岁</strong><span>投资金额：1.7万</span><span>定级原因：场所上访20次以上40次以下</span></div></div><div class="person-card"><i class="avatar">李</i><div><strong>李晓丹 女 57岁</strong><span>投资金额：9万</span><span>定级原因：场所上访20次以上40次以下</span></div></div></div></div></div><aside class="side"><div class="panel"><h3>人员户籍结构</h3><div class="donut"></div></div><div class="panel"><h3>档案摘要</h3><div class="rank-list"><span>本市区县 <b>2223人</b></span><span>省内外地市 <b>1036人</b></span><span>省份未填写 <b>13685人</b></span></div></div></aside></div>
+        </div>
+      </section>
+
+      <section class="option option-3">
+        <div class="option-label"><b>03 金融风控风</b><small>突出投资金额、资金关系、隐显对应关系</small></div>
+        <div class="screen">
+          <div class="hero"><div><h2>隐名投资人风控总览 <span>69735人</span></h2><p>围绕金额、显性对应人、等级风险建立风控视图</p></div><div class="hero-actions"><span class="chip">资金图谱</span><span class="chip">数据分析</span></div></div>
+          <div class="metric-row"><div class="metric"><small>风险一级</small><b>2人</b></div><div class="metric"><small>风险二级</small><b>2人</b></div><div class="metric"><small>隐显关联</small><b>已接入</b></div><div class="metric"><small>省内合计</small><b>3259人</b></div><div class="metric"><small>省份统计</small><b>69735人</b></div></div>
+          <div class="layout"><div class="people-grid"><div class="group red"><div class="group-head"><h3>高风险资金人群 <span>2人</span></h3><span class="chip">一级</span></div><div class="person-row"><div class="person-card"><i class="avatar">杨</i><div><strong>杨馨嘉</strong><span>投资金额：550万</span><span>显性投资人：姓名 / 身份证 / 电话</span><span>风险原因：场所上访40次以上</span></div></div><div class="person-card"><i class="avatar">赵</i><div><strong>赵瑞华</strong><span>投资金额：83.56万</span><span>显性投资人：姓名 / 身份证 / 电话</span><span>风险原因：网络发声挑头</span></div></div></div></div><div class="group yellow"><div class="group-head"><h3>活跃资金人群 <span>2人</span></h3><span class="chip">二级</span></div><div class="person-row"><div class="person-card"><i class="avatar">孙</i><div><strong>孙家龙</strong><span>投资金额：1.7万</span><span>显性投资人：姓名 / 身份证 / 电话</span></div></div><div class="person-card"><i class="avatar">李</i><div><strong>李晓丹</strong><span>投资金额：9万</span><span>显性投资人：姓名 / 身份证 / 电话</span></div></div></div></div></div><aside class="side"><div class="panel"><h3>投资金额比例</h3><div class="donut"></div></div><div class="panel"><h3>风控标签</h3><div class="rank-list"><span>场所上访 <b>一级</b></span><span>网络发声 <b>一级</b></span><span>省内人员 <b>3259</b></span></div></div></aside></div>
+        </div>
+      </section>
+
+      <section class="option option-4">
+        <div class="option-label"><b>04 黑金政务风</b><small>稳重、压得住场，适合领导汇报</small></div>
+        <div class="screen">
+          <div class="hero"><div><h2>隐名投资人研判专报 <span>69735人</span></h2><p>黑金主色，弱化科技感，强化权威和重点摘要</p></div><div class="hero-actions"><span class="chip">研判视图</span><span class="chip">后台管理</span></div></div>
+          <div class="metric-row"><div class="metric"><small>一级风险</small><b>2人</b></div><div class="metric"><small>二级风险</small><b>2人</b></div><div class="metric"><small>三级风险</small><b>21人</b></div><div class="metric"><small>四级风险</small><b>4人</b></div><div class="metric"><small>黑龙江</small><b>3259人</b></div></div>
+          <div class="layout"><div class="people-grid"><div class="group red"><div class="group-head"><h3>一级隐名投资人 <span>2人</span></h3><span class="chip">重点人员</span></div><div class="person-row"><div class="person-card"><i class="avatar">杨</i><div><strong>杨馨嘉 女 47岁</strong><span>550万 · 场所上访40次以上</span><span>道里分局爱建路派出所</span></div></div><div class="person-card"><i class="avatar">赵</i><div><strong>赵瑞华 女 66岁</strong><span>83.56万 · 网络发声挑头</span><span>道里分局兆麟派出所</span></div></div></div></div><div class="group yellow"><div class="group-head"><h3>二级隐名投资人 <span>2人</span></h3><span class="chip">重点关注</span></div><div class="person-row"><div class="person-card"><i class="avatar">孙</i><div><strong>孙家龙 男 57岁</strong><span>1.7万 · 场所上访20次以上40次以下</span></div></div><div class="person-card"><i class="avatar">李</i><div><strong>李晓丹 女 57岁</strong><span>9万 · 场所上访20次以上40次以下</span></div></div></div></div></div><aside class="side"><div class="panel"><h3>户籍分布</h3><div class="donut"></div></div><div class="panel"><h3>研判摘要</h3><div class="rank-list"><span>一级二级 <b>4人</b></span><span>黑龙江省内 <b>3259人</b></span><span>未填写省份 <b>13685人</b></span></div></div></aside></div>
+        </div>
+      </section>
+
+      <section class="option option-5">
+        <div class="option-label"><b>05 地图态势风</b><small>地区和省份统计最突出，适合看空间分布</small></div>
+        <div class="screen">
+          <div class="hero"><div><h2>隐名投资人户籍态势 <span>69735人</span></h2><p>突出本市区县、省内外地市、各省分布，人员列表让位给态势</p></div><div class="hero-actions"><span class="chip">本市区县</span><span class="chip">省内地市</span><span class="chip">各省</span></div></div>
+          <div class="metric-row"><div class="metric"><small>本市区县</small><b>2223人</b></div><div class="metric"><small>省内外地市</small><b>1036人</b></div><div class="metric"><small>黑龙江合计</small><b>3259人</b></div><div class="metric"><small>各省合计</small><b>69735人</b></div><div class="metric"><small>未填写省份</small><b>13685人</b></div></div>
+          <div class="layout"><div class="side"><div class="map-card"></div><div class="panel"><h3>省内排行</h3><div class="rank-list"><span>南岗 <b>661人</b></span><span>道里 <b>554人</b></span><span>香坊 <b>298人</b></span><span>大庆 <b>195人</b></span></div></div></div><div class="people-grid"><div class="group red"><div class="group-head"><h3>一级隐名投资人 <span>2人</span></h3><span class="chip">点击看详情</span></div><div class="person-row"><div class="person-card"><i class="avatar">杨</i><div><strong>杨馨嘉</strong><span>道里 · 爱建路派出所</span><span>场所上访40次以上</span></div></div><div class="person-card"><i class="avatar">赵</i><div><strong>赵瑞华</strong><span>道里 · 兆麟派出所</span><span>网络发声挑头</span></div></div></div></div><div class="group yellow"><div class="group-head"><h3>二级隐名投资人 <span>2人</span></h3><span class="chip">点击看详情</span></div><div class="person-row"><div class="person-card"><i class="avatar">孙</i><div><strong>孙家龙</strong><span>香坊 · 建筑街派出所</span></div></div><div class="person-card"><i class="avatar">李</i><div><strong>李晓丹</strong><span>南岗 · 巴山派出所</span></div></div></div></div></div></div>
+        </div>
+      </section>
+
+      <section class="option option-6">
+        <div class="option-label"><b>06 极简数据舱风</b><small>少装饰、多留白，读数舒服，适合长期使用</small></div>
+        <div class="screen">
+          <div class="hero"><div><h2>隐名投资人数据舱 <span>69735人</span></h2><p>减少强色块，所有区域像一个现代数据产品</p></div><div class="hero-actions"><span class="chip">显名首页</span><span class="chip">后台管理</span></div></div>
+          <div class="metric-row"><div class="metric"><small>一级</small><b>2</b></div><div class="metric"><small>二级</small><b>2</b></div><div class="metric"><small>三级</small><b>21</b></div><div class="metric"><small>四级</small><b>4</b></div><div class="metric"><small>黑龙江</small><b>3259</b></div></div>
+          <div class="layout"><div class="people-grid"><div class="group red"><div class="group-head"><h3>一级隐名投资人 <span>2人</span></h3><span class="chip">高优先级</span></div><div class="person-row"><div class="person-card"><i class="avatar">杨</i><div><strong>杨馨嘉 女 47岁</strong><span>550万</span><span>场所上访40次以上</span></div></div><div class="person-card"><i class="avatar">赵</i><div><strong>赵瑞华 女 66岁</strong><span>83.56万</span><span>网络发声挑头</span></div></div></div></div><div class="group yellow"><div class="group-head"><h3>二级隐名投资人 <span>2人</span></h3><span class="chip">中优先级</span></div><div class="person-row"><div class="person-card"><i class="avatar">孙</i><div><strong>孙家龙 男 57岁</strong><span>1.7万</span><span>场所上访20次以上40次以下</span></div></div><div class="person-card"><i class="avatar">李</i><div><strong>李晓丹 女 57岁</strong><span>9万</span><span>场所上访20次以上40次以下</span></div></div></div></div></div><aside class="side"><div class="panel"><h3>职业分布</h3><div class="donut"></div></div><div class="panel"><h3>地区概览</h3><div class="rank-list"><span>本市区县 <b>2223</b></span><span>省内外地市 <b>1036</b></span><span>其他省份 <b>66476</b></span></div></div></aside></div>
+        </div>
+      </section>
+
+      <section class="option option-7">
+        <div class="option-label"><b>07 红蓝预警风</b><small>一级二级更醒目，风险层次最直接</small></div>
+        <div class="screen">
+          <div class="hero"><div><h2>隐名投资人预警看板 <span>69735人</span></h2><p>红色强调高风险，蓝色承载统计和低风险信息</p></div><div class="hero-actions"><span class="chip">红色预警</span><span class="chip">蓝色统计</span></div></div>
+          <div class="metric-row"><div class="metric"><small>红色一级</small><b>2人</b></div><div class="metric"><small>橙色二级</small><b>2人</b></div><div class="metric"><small>蓝色三级</small><b>21人</b></div><div class="metric"><small>绿色四级</small><b>4人</b></div><div class="metric"><small>全量隐名</small><b>69735人</b></div></div>
+          <div class="layout"><div class="people-grid"><div class="group red"><div class="group-head"><h3>一级预警人员 <span>2人</span></h3><span class="chip">立即关注</span></div><div class="person-row"><div class="person-card"><i class="avatar">杨</i><div><strong>杨馨嘉 女 47岁</strong><span>投资金额：550万</span><span>场所上访40次以上</span></div></div><div class="person-card"><i class="avatar">赵</i><div><strong>赵瑞华 女 66岁</strong><span>投资金额：83.56万</span><span>网络发声挑头</span></div></div></div></div><div class="group yellow"><div class="group-head"><h3>二级预警人员 <span>2人</span></h3><span class="chip">持续关注</span></div><div class="person-row"><div class="person-card"><i class="avatar">孙</i><div><strong>孙家龙 男 57岁</strong><span>投资金额：1.7万</span><span>场所上访20次以上40次以下</span></div></div><div class="person-card"><i class="avatar">李</i><div><strong>李晓丹 女 57岁</strong><span>投资金额：9万</span><span>场所上访20次以上40次以下</span></div></div></div></div></div><aside class="side"><div class="panel"><h3>库列管情况</h3><div class="donut"></div></div><div class="panel"><h3>预警摘要</h3><div class="rank-list"><span>一级二级 <b>4人</b></span><span>黑龙江合计 <b>3259人</b></span><span>省份未填写 <b>13685人</b></span></div></div></aside></div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

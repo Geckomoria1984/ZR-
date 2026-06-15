@@ -15,6 +15,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
@@ -28,6 +30,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class ExcelDashboardService {
   private static final int HOME_PERSON_LIMIT = 206;
+  private static final Pattern MEDICAL_SEGMENT_PATTERN = Pattern.compile("(?=\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}\\s+\\d{1,2}:\\d{2})");
+  private static final Pattern OUTPATIENT_DEPARTMENT_PATTERN = Pattern.compile("在(.{2,80}?门诊)");
   private static final List<String> HARBIN_AREAS = List.of(
       "道里", "南岗", "道外", "平房", "松北", "香坊", "呼兰", "阿城",
       "双城", "依兰", "方正", "宾县", "巴彦", "木兰", "通河", "延寿",
@@ -176,6 +180,10 @@ public class ExcelDashboardService {
       dashboard.put("harbinRegionFullRows", harbinRegionRows(harbinRegionFullCounts));
       dashboard.put("provinceCityFullRows", provinceCityRows(provinceCityFullCounts));
       dashboard.put("outsideProvinceRows", outsideProvinceRows(outsideProvinceCounts));
+      dashboard.put("occupationRows", occupationRows(adminPeople));
+      dashboard.put("genderRows", genderRows(adminPeople));
+      dashboard.put("libraryLevelRows", libraryLevelRows(adminPeople));
+      dashboard.put("clinicDepartmentRows", clinicDepartmentRows(adminPeople));
       dashboard.put("riskBars", riskBars(groupCounts));
       dashboard.put("amountBuckets", amountBuckets(adminPeople.stream().filter(this::isHeilongjiangPerson).toList()));
       dashboard.put("clinicBars", clinicBars());
@@ -251,6 +259,10 @@ public class ExcelDashboardService {
     normalized.put("harbinRegionFullRows", harbinRegionRows(harbinRegionFullCounts));
     normalized.put("provinceCityFullRows", provinceCityRows(provinceCityFullCounts));
     normalized.put("outsideProvinceRows", outsideProvinceRows(outsideProvinceCounts));
+    normalized.put("occupationRows", occupationRows(adminPeople));
+    normalized.put("genderRows", genderRows(adminPeople));
+    normalized.put("libraryLevelRows", libraryLevelRows(adminPeople));
+    normalized.put("clinicDepartmentRows", clinicDepartmentRows(adminPeople));
     normalized.put("riskBars", riskBars(groupCounts));
     normalized.put("amountBuckets", amountBuckets(adminPeople.stream().filter(this::isHeilongjiangPerson).toList()));
     return normalized;
@@ -590,6 +602,103 @@ public class ExcelDashboardService {
     return isHarbinArea(district) || isHeilongjiangNonHarbinCity(district);
   }
 
+  private List<List<Object>> occupationRows(List<Map<String, Object>> people) {
+    Map<String, Long> counts = new LinkedHashMap<>();
+    for (Map<String, Object> person : people) {
+      String occupation = String.valueOf(person.getOrDefault("occupation", "")).trim();
+      if (occupation.isBlank() || "null".equals(occupation)) occupation = "未填写";
+      counts.merge(occupation, 1L, Long::sum);
+    }
+    return counts.entrySet().stream()
+        .sorted(this::compareRegionCountDesc)
+        .map(entry -> List.of((Object) entry.getKey(), (Object) entry.getValue()))
+        .toList();
+  }
+
+  private List<List<Object>> genderRows(List<Map<String, Object>> people) {
+    Map<String, Long> counts = new LinkedHashMap<>();
+    for (Map<String, Object> person : people) {
+      String gender = String.valueOf(person.getOrDefault("gender", "")).trim();
+      if (!"男".equals(gender) && !"女".equals(gender)) gender = "未填写";
+      counts.merge(gender, 1L, Long::sum);
+    }
+    return counts.entrySet().stream()
+        .sorted(this::compareRegionCountDesc)
+        .map(entry -> List.of((Object) entry.getKey(), (Object) entry.getValue()))
+        .toList();
+  }
+
+  private List<List<Object>> libraryLevelRows(List<Map<String, Object>> people) {
+    Map<String, Long> counts = new LinkedHashMap<>();
+    for (Map<String, Object> person : people) {
+      String status = String.valueOf(person.getOrDefault("libraryStatus", "")).trim().toUpperCase();
+      String level = "";
+      if (status.contains("C级") || status.contains("C級") || status.contains("C级".toUpperCase())) level = "C级";
+      if (status.contains("D级") || status.contains("D級") || status.contains("D级".toUpperCase())) level = "D级";
+      if (!level.isBlank()) counts.merge(level, 1L, Long::sum);
+    }
+    return counts.entrySet().stream()
+        .sorted(this::compareRegionCountDesc)
+        .map(entry -> List.of((Object) entry.getKey(), (Object) entry.getValue()))
+        .toList();
+  }
+
+  private List<List<Object>> clinicDepartmentRows(List<Map<String, Object>> people) {
+    Map<String, Long> counts = new LinkedHashMap<>();
+    for (Map<String, Object> person : people) {
+      String note = String.valueOf(person.getOrDefault("latestNote", "")).trim();
+      for (String department : outpatientDepartments(note)) {
+        counts.merge(department, 1L, Long::sum);
+      }
+    }
+    return counts.entrySet().stream()
+        .sorted(this::compareRegionCountDesc)
+        .map(entry -> List.of((Object) entry.getKey(), (Object) entry.getValue()))
+        .toList();
+  }
+
+  private List<String> outpatientDepartments(String note) {
+    if (note == null || note.isBlank() || "未填写".equals(note)) return List.of();
+    List<String> departments = new ArrayList<>();
+    for (String segment : MEDICAL_SEGMENT_PATTERN.split(note)) {
+      String text = segment.trim();
+      if (text.isBlank() || !text.contains("门诊")) continue;
+      if (text.contains("就诊类型") && text.contains("住院") && !text.contains("就诊类型：门诊") && !text.contains("就诊类型:门诊")) {
+        continue;
+      }
+      String department = outpatientDepartment(text);
+      if (!department.isBlank()) departments.add(department);
+    }
+    return departments;
+  }
+
+  private String outpatientDepartment(String text) {
+    Matcher matcher = OUTPATIENT_DEPARTMENT_PATTERN.matcher(text);
+    if (!matcher.find()) return "";
+    String clinic = matcher.group(1)
+        .replaceAll("[，,；;。].*$", "")
+        .replaceAll("门诊.*$", "门诊");
+    return normalizeClinicDepartment(clinic);
+  }
+
+  private String normalizeClinicDepartment(String clinic) {
+    String text = String.valueOf(clinic == null ? "" : clinic)
+        .replace("门诊", "")
+        .replaceAll("[\\s　]+", "")
+        .trim();
+    if (text.isBlank()) return "";
+
+    text = text.replaceFirst("^.*(?:医院|卫生院|门诊部|卫生服务中心|卫生服务站|医大[^，,；;。\\s]*|医疗中心|体检中心|急救中心|分院|院区|中心)", "");
+    Matcher deptMatcher = Pattern.compile("([\\u4e00-\\u9fa5]{1,12}科)[一二三四五六七八九十0-9]*$").matcher(text);
+    if (deptMatcher.find()) return deptMatcher.group(1);
+
+    text = text
+        .replaceAll("^[东西南北中]?(?:院区|分院|医院|中心)", "")
+        .replaceAll("[一二三四五六七八九十0-9]+$", "")
+        .trim();
+    return text;
+  }
+
   private List<Map<String, Object>> riskBars(Map<String, Integer> counts) {
     return List.of(
         Map.of("label", "一级", "values", List.of(counts.getOrDefault("organizers", 0), 0, 0, 0)),
@@ -631,7 +740,7 @@ public class ExcelDashboardService {
   }
 
   private List<Integer> clinicBars() {
-    return List.of(94, 76, 70, 64, 58, 52, 47, 42, 38, 34, 30, 27, 24, 22, 19, 17, 15, 13, 11, 10, 8, 7, 6, 5);
+    return List.of();
   }
 
   private Map<String, Integer> headers(Row row, DataFormatter formatter) {

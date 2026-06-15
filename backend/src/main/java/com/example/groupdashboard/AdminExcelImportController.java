@@ -24,9 +24,10 @@ public class AdminExcelImportController {
 
   @GetMapping("/related-people/graph")
   public Map<String, Object> relatedPeopleGraph(
-      @RequestParam(defaultValue = "") String name,
-      @RequestParam(defaultValue = "") String idNumber) {
-    return importService.relatedPeopleGraph(name, idNumber);
+      @RequestParam(name = "name", defaultValue = "") String name,
+      @RequestParam(name = "idNumber", defaultValue = "") String idNumber,
+      @RequestParam(name = "relatedPerson", defaultValue = "") String relatedPerson) {
+    return importService.relatedPeopleGraph(name, idNumber, relatedPerson);
   }
 
   @PostMapping("/hidden-investors/import-excel")

@@ -3,6 +3,9 @@ package com.example.groupdashboard;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.ByteArrayOutputStream;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -357,6 +360,38 @@ class AdminPeopleControllerTest {
   }
 
   @Test
+  void relatedPeopleGraphUsesExplicitFamilyRelationsFromPersonFieldAsFallback() {
+    String relatedPerson = String.join("\n",
+        "离异,王丽荣,239005197605092521,13945531516",
+        "同户籍,徐慕琳,230802198107020024,13836112435",
+        "配偶,崔永玲,232301198303193626,13900139096",
+        "女儿：徐小小 230102201001010020 13900000001");
+
+    ResponseEntity<Map> graph = rest.getForEntity(
+        URI.create("http://localhost:" + port + "/api/admin/imports/related-people/graph"
+            + "?name=" + encode("徐晓辉")
+            + "&idNumber=" + encode("232301197502181331")
+            + "&relatedPerson=" + encode(relatedPerson)),
+        Map.class);
+
+    assertThat(graph.getStatusCode().is2xxSuccessful()).isTrue();
+    assertThat(graph.getBody().get("total")).isEqualTo(2);
+    List<Map<String, Object>> rows = (List<Map<String, Object>>) graph.getBody().get("rows");
+    assertThat(rows)
+        .extracting(row -> row.get("name"))
+        .containsExactly("崔永玲", "徐小小");
+    assertThat(rows)
+        .extracting(row -> row.get("relation"))
+        .containsExactly("配偶", "女儿");
+    assertThat(rows)
+        .extracting(row -> row.get("phone"))
+        .containsExactly("13900139096", "13900000001");
+    assertThat(rows)
+        .extracting(row -> row.get("name"))
+        .doesNotContain("王丽荣", "徐慕琳");
+  }
+
+  @Test
   @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
   void hiddenInvestorImportFeedsHiddenInvestorDashboard() throws Exception {
     ByteArrayResource excel = new ByteArrayResource(hiddenInvestorDashboardWorkbook()) {
@@ -376,7 +411,7 @@ class AdminPeopleControllerTest {
         Map.class);
 
     assertThat(imported.getStatusCode().is2xxSuccessful()).isTrue();
-    assertThat(imported.getBody().get("imported")).isEqualTo(4);
+    assertThat(imported.getBody().get("imported")).isEqualTo(6);
 
     ResponseEntity<Map> dashboard = rest.getForEntity(
         "http://localhost:" + port + "/api/dashboard/hidden-investors",
@@ -387,10 +422,15 @@ class AdminPeopleControllerTest {
     assertThat(((List<Map<String, Object>>) dashboard.getBody().get("people"))).hasSize(2);
 
     Map<String, Object> groups = (Map<String, Object>) dashboard.getBody().get("groups");
+    assertThat(((Map<String, Object>) groups.get("organizers")).get("title")).isEqualTo("组织串联人员");
+    assertThat(((Map<String, Object>) groups.get("responders")).get("title")).isEqualTo("活跃响应人员");
+    assertThat(((Map<String, Object>) groups.get("general")).get("title")).isEqualTo("一般参与人员");
+    assertThat(((Map<String, Object>) groups.get("watch")).get("title")).isEqualTo("密切关注人员");
     assertThat(((Number) ((Map<String, Object>) groups.get("organizers")).get("count")).intValue()).isEqualTo(1);
     assertThat(((Number) ((Map<String, Object>) groups.get("responders")).get("count")).intValue()).isEqualTo(1);
     assertThat(((Number) ((Map<String, Object>) groups.get("general")).get("count")).intValue()).isEqualTo(1);
     assertThat(((Number) ((Map<String, Object>) groups.get("watch")).get("count")).intValue()).isEqualTo(1);
+    assertThat(((Number) ((Map<String, Object>) groups.get("hidden")).get("count")).intValue()).isEqualTo(1);
 
     List<Map<String, Object>> amountBuckets = (List<Map<String, Object>>) dashboard.getBody().get("amountBuckets");
     Map<String, Object> highAmount = amountBuckets.stream()
@@ -400,14 +440,24 @@ class AdminPeopleControllerTest {
     assertThat(((Number) highAmount.get("count")).intValue()).isEqualTo(1);
 
     List<List<List<Object>>> regionRows = (List<List<List<Object>>>) dashboard.getBody().get("regionRows");
-    assertThat(regionRows.get(0)).contains(List.of("合计", 0));
+    assertThat(regionRows.get(0)).contains(List.of("合计", 4));
+    assertThat(regionRows.get(1)).contains(List.of("合计", 1));
 
     ResponseEntity<Map> peoplePage = rest.getForEntity(
         "http://localhost:" + port + "/api/dashboard/hidden-investors/people?group=organizers&page=1&size=10",
         Map.class);
     assertThat(peoplePage.getStatusCode().is2xxSuccessful()).isTrue();
     assertThat(peoplePage.getBody().get("total")).isEqualTo(1);
-    assertThat(((List<Map<String, Object>>) peoplePage.getBody().get("rows")).get(0).get("name")).isEqualTo("隐名一级甲");
+    Map<String, Object> hiddenPerson = ((List<Map<String, Object>>) peoplePage.getBody().get("rows")).get(0);
+    assertThat(hiddenPerson.get("name")).isEqualTo("隐名一级甲");
+    assertThat(hiddenPerson.get("risk")).isEqualTo("组织串联");
+    assertThat(hiddenPerson.get("visitDetail")).isEqualTo("省金融监管局2次，北京职场3次，金融大厦4次");
+    assertThat(hiddenPerson.get("onlineSpeech")).isEqualTo("涉及ZR群7个，挑头1次，响应4次");
+    assertThat(hiddenPerson.get("address")).isEqualTo("户籍测试地址");
+    assertThat(hiddenPerson.get("currentAddress")).isEqualTo("现住址测试");
+    assertThat(hiddenPerson.get("responsiblePerson")).isEqualTo("所领导 13100000001");
+    assertThat(hiddenPerson.get("policeContact")).isEqualTo("包保民警 13200000002");
+    assertThat(hiddenPerson.get("community")).isEqualTo("社区干部 13300000003");
 
     ResponseEntity<Map> generalPage = rest.getForEntity(
         "http://localhost:" + port + "/api/dashboard/hidden-investors/people?group=general&page=1&size=10",
@@ -415,6 +465,13 @@ class AdminPeopleControllerTest {
     assertThat(generalPage.getStatusCode().is2xxSuccessful()).isTrue();
     assertThat(generalPage.getBody().get("total")).isEqualTo(1);
     assertThat(((List<Map<String, Object>>) generalPage.getBody().get("rows")).get(0).get("name")).isEqualTo("隐名三级丙");
+
+    ResponseEntity<Map> hiddenPage = rest.getForEntity(
+        "http://localhost:" + port + "/api/dashboard/hidden-investors/people?group=hidden&page=1&size=10",
+        Map.class);
+    assertThat(hiddenPage.getStatusCode().is2xxSuccessful()).isTrue();
+    assertThat(hiddenPage.getBody().get("total")).isEqualTo(1);
+    assertThat(((List<Map<String, Object>>) hiddenPage.getBody().get("rows")).get(0).get("name")).isEqualTo("黑龙江未分级隐名");
   }
 
   @Test
@@ -463,6 +520,13 @@ class AdminPeopleControllerTest {
     assertThat(nodes)
         .extracting(node -> node.get("fullLabel"))
         .doesNotContain(otherName);
+    List<Integer> firstLayerXs = nodes.stream()
+        .filter(node -> "一层".equals(node.get("level")))
+        .map(node -> ((Number) node.get("x")).intValue())
+        .sorted()
+        .toList();
+    assertThat(firstLayerXs).hasSize(2);
+    assertThat(firstLayerXs.get(1) - firstLayerXs.get(0)).isEqualTo(262);
 
     Map<Object, Object> nodeLevels = nodes.stream()
         .collect(java.util.stream.Collectors.toMap(node -> node.get("id"), node -> node.get("level")));
@@ -473,6 +537,317 @@ class AdminPeopleControllerTest {
         .doesNotContain("向上层投资金额：20万");
     assertThat(edges).allSatisfy(edge ->
         assertThat(nodeLevels.get(edge.get("source"))).isNotEqualTo(nodeLevels.get(edge.get("target"))));
+  }
+
+  @Test
+  void hiddenInvestorFundRelationGraphIncludesItsVisibleInvestor() throws Exception {
+    String peopleUrl = "http://localhost:" + port + "/api/admin/people";
+    ResponseEntity<Map> list = rest.getForEntity(peopleUrl + "?size=2", Map.class);
+    List<Map<String, Object>> people = (List<Map<String, Object>>) list.getBody().get("rows");
+    Map<String, Object> targetPerson = people.get(0);
+    Map<String, Object> otherPerson = people.get(1);
+    String targetName = String.valueOf(targetPerson.get("name"));
+    String targetIdNumber = String.valueOf(targetPerson.get("idNumber"));
+    String otherName = String.valueOf(otherPerson.get("name"));
+    String otherIdNumber = String.valueOf(otherPerson.get("idNumber"));
+    ByteArrayResource excel = new ByteArrayResource(layeredFundRelationWorkbook(targetName, targetIdNumber, otherName, otherIdNumber)) {
+      @Override
+      public String getFilename() {
+        return "层级资金关系.xlsx";
+      }
+    };
+    MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+    body.add("file", excel);
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+    ResponseEntity<Map> imported = rest.postForEntity(
+        "http://localhost:" + port + "/api/admin/fund-relations/import-excel",
+        new HttpEntity<>(body, headers),
+        Map.class);
+
+    assertThat(imported.getStatusCode().is2xxSuccessful()).isTrue();
+
+    ResponseEntity<Map> graph = rest.getForEntity(
+        "http://localhost:" + port + "/api/admin/fund-relations/identity?idNumber=230100198001010001&name=一层人员甲",
+        Map.class);
+
+    assertThat(graph.getStatusCode().is2xxSuccessful()).isTrue();
+    Map<String, Object> graphData = (Map<String, Object>) graph.getBody().get("graph");
+    List<Map<String, Object>> nodes = (List<Map<String, Object>>) graphData.get("nodes");
+    assertThat(nodes)
+        .filteredOn(node -> "显名投资人".equals(node.get("level")))
+        .extracting(node -> node.get("fullLabel"))
+        .containsExactly(targetName);
+    assertThat(nodes)
+        .filteredOn(node -> "一层人员甲".equals(node.get("fullLabel")))
+        .extracting(node -> node.get("level"))
+        .containsExactly("一层");
+    Map<String, Object> visibleNode = nodes.stream()
+        .filter(node -> targetName.equals(node.get("fullLabel")))
+        .findFirst()
+        .orElseThrow();
+    Map<String, Object> hiddenNode = nodes.stream()
+        .filter(node -> "一层人员甲".equals(node.get("fullLabel")))
+        .findFirst()
+        .orElseThrow();
+    List<Map<String, Object>> edges = (List<Map<String, Object>>) graphData.get("edges");
+    assertThat(edges).anySatisfy(edge -> {
+      assertThat(edge.get("source")).isEqualTo(hiddenNode.get("id"));
+      assertThat(edge.get("target")).isEqualTo(visibleNode.get("id"));
+    });
+  }
+
+  @Test
+  void hiddenInvestorFundRelationGraphUsesImportedVisibleInvestorWhenNoRelationRowsMatch() throws Exception {
+    String peopleUrl = "http://localhost:" + port + "/api/admin/people";
+    ResponseEntity<Map> list = rest.getForEntity(peopleUrl + "?size=2", Map.class);
+    List<Map<String, Object>> people = (List<Map<String, Object>>) list.getBody().get("rows");
+    Map<String, Object> targetPerson = people.get(0);
+    Map<String, Object> otherPerson = people.get(1);
+    ByteArrayResource excel = new ByteArrayResource(layeredFundRelationWorkbook(
+        String.valueOf(targetPerson.get("name")),
+        String.valueOf(targetPerson.get("idNumber")),
+        String.valueOf(otherPerson.get("name")),
+        String.valueOf(otherPerson.get("idNumber")))) {
+      @Override
+      public String getFilename() {
+        return "层级资金关系.xlsx";
+      }
+    };
+    MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+    body.add("file", excel);
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+    rest.postForEntity(
+        "http://localhost:" + port + "/api/admin/fund-relations/import-excel",
+        new HttpEntity<>(body, headers),
+        Map.class);
+
+    ResponseEntity<Map> graph = rest.getForEntity(
+        URI.create("http://localhost:" + port + "/api/admin/fund-relations/identity"
+            + "?idNumber=230104196812133126"
+            + "&name=" + encode("李晓丹")
+            + "&visibleName=" + encode("李琳琳")),
+        Map.class);
+
+    assertThat(graph.getStatusCode().is2xxSuccessful()).isTrue();
+    assertThat(graph.getBody().get("total")).isEqualTo(0);
+    Map<String, Object> graphData = (Map<String, Object>) graph.getBody().get("graph");
+    List<Map<String, Object>> nodes = (List<Map<String, Object>>) graphData.get("nodes");
+    assertThat(nodes)
+        .filteredOn(node -> "显名投资人".equals(node.get("level")))
+        .extracting(node -> node.get("fullLabel"))
+        .containsExactly("李琳琳");
+    assertThat(nodes)
+        .filteredOn(node -> "当前隐名".equals(node.get("level")))
+        .extracting(node -> node.get("fullLabel"))
+        .containsExactly("李晓丹");
+  }
+
+  @Test
+  void visibleInvestorGraphFallsBackToNameWhenFundRelationIdDoesNotMatch() throws Exception {
+    String peopleUrl = "http://localhost:" + port + "/api/admin/people";
+    ResponseEntity<Map> list = rest.getForEntity(peopleUrl + "?size=1", Map.class);
+    List<Map<String, Object>> people = (List<Map<String, Object>>) list.getBody().get("rows");
+    Map<String, Object> targetPerson = people.get(0);
+    String targetName = String.valueOf(targetPerson.get("name"));
+    ByteArrayResource excel = new ByteArrayResource(layeredFundRelationWorkbook(targetName, "fund-only-visible-id", "其他显名", "other-visible-id")) {
+      @Override
+      public String getFilename() {
+        return "显名证件号不一致资金关系.xlsx";
+      }
+    };
+    MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+    body.add("file", excel);
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+    rest.postForEntity(
+        "http://localhost:" + port + "/api/admin/fund-relations/import-excel",
+        new HttpEntity<>(body, headers),
+        Map.class);
+
+    ResponseEntity<Map> graph = rest.getForEntity(
+        "http://localhost:" + port + "/api/admin/fund-relations/person/" + targetPerson.get("id"),
+        Map.class);
+
+    assertThat(graph.getStatusCode().is2xxSuccessful()).isTrue();
+    assertThat(graph.getBody().get("total")).isEqualTo(3);
+    Map<String, Object> graphData = (Map<String, Object>) graph.getBody().get("graph");
+    List<Map<String, Object>> nodes = (List<Map<String, Object>>) graphData.get("nodes");
+    assertThat(nodes)
+        .extracting(node -> node.get("fullLabel"))
+        .contains(targetName, "一层人员甲", "二层人员丙")
+        .doesNotContain("其他显名一层");
+  }
+
+  @Test
+  void visibleInvestorGraphIncludesHiddenInvestorsFromHiddenImportWhenFundRowsAreMissing() throws Exception {
+    String peopleUrl = "http://localhost:" + port + "/api/admin/people";
+    ResponseEntity<Map> list = rest.getForEntity(peopleUrl + "?size=1", Map.class);
+    List<Map<String, Object>> people = (List<Map<String, Object>>) list.getBody().get("rows");
+    Map<String, Object> targetPerson = people.get(0);
+    ByteArrayResource emptyFundExcel = new ByteArrayResource(emptyLayeredFundRelationWorkbook()) {
+      @Override
+      public String getFilename() {
+        return "空资金关系.xlsx";
+      }
+    };
+    MultiValueMap<String, Object> fundBody = new LinkedMultiValueMap<>();
+    fundBody.add("file", emptyFundExcel);
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+    rest.postForEntity(
+        "http://localhost:" + port + "/api/admin/fund-relations/import-excel",
+        new HttpEntity<>(fundBody, headers),
+        Map.class);
+
+    ByteArrayResource hiddenExcel = new ByteArrayResource(hiddenInvestorVisibleMappingWorkbook(
+        String.valueOf(targetPerson.get("name")),
+        String.valueOf(targetPerson.get("idNumber")))) {
+      @Override
+      public String getFilename() {
+        return "隐名显性对应.xlsx";
+      }
+    };
+    MultiValueMap<String, Object> hiddenBody = new LinkedMultiValueMap<>();
+    hiddenBody.add("file", hiddenExcel);
+    rest.postForEntity(
+        "http://localhost:" + port + "/api/admin/imports/hidden-investors/import-excel",
+        new HttpEntity<>(hiddenBody, headers),
+        Map.class);
+
+    ResponseEntity<Map> graph = rest.getForEntity(
+        "http://localhost:" + port + "/api/admin/fund-relations/person/" + targetPerson.get("id"),
+        Map.class);
+
+    assertThat(graph.getStatusCode().is2xxSuccessful()).isTrue();
+    assertThat(graph.getBody().get("total")).isEqualTo(1);
+    Map<String, Object> graphData = (Map<String, Object>) graph.getBody().get("graph");
+    List<Map<String, Object>> nodes = (List<Map<String, Object>>) graphData.get("nodes");
+    assertThat(nodes)
+        .extracting(node -> node.get("fullLabel"))
+        .contains(String.valueOf(targetPerson.get("name")), "隐名反查甲");
+    List<Map<String, Object>> edges = (List<Map<String, Object>>) graphData.get("edges");
+    assertThat(edges)
+        .extracting(edge -> edge.get("amount"))
+        .contains("向上层投资金额：25万");
+  }
+
+  @Test
+  void hiddenInvestorGraphUsesHiddenImportAmountWhenFundRowsAreMissing() throws Exception {
+    ResponseEntity<Map> list = rest.getForEntity("http://localhost:" + port + "/api/admin/people?size=1", Map.class);
+    Map<String, Object> targetPerson = ((List<Map<String, Object>>) list.getBody().get("rows")).get(0);
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+    MultiValueMap<String, Object> fundBody = new LinkedMultiValueMap<>();
+    fundBody.add("file", new ByteArrayResource(emptyLayeredFundRelationWorkbook()) {
+      @Override
+      public String getFilename() {
+        return "空资金关系.xlsx";
+      }
+    });
+    rest.postForEntity(
+        "http://localhost:" + port + "/api/admin/fund-relations/import-excel",
+        new HttpEntity<>(fundBody, headers),
+        Map.class);
+
+    MultiValueMap<String, Object> hiddenBody = new LinkedMultiValueMap<>();
+    hiddenBody.add("file", new ByteArrayResource(hiddenInvestorVisibleMappingWorkbook(
+        String.valueOf(targetPerson.get("name")),
+        String.valueOf(targetPerson.get("idNumber")))) {
+      @Override
+      public String getFilename() {
+        return "隐名显性对应.xlsx";
+      }
+    });
+    rest.postForEntity(
+        "http://localhost:" + port + "/api/admin/imports/hidden-investors/import-excel",
+        new HttpEntity<>(hiddenBody, headers),
+        Map.class);
+
+    ResponseEntity<Map> graph = rest.getForEntity(
+        URI.create("http://localhost:" + port + "/api/admin/fund-relations/identity"
+            + "?idNumber=230100198001019901"
+            + "&name=" + encode("隐名反查甲")
+            + "&visibleName=" + encode(String.valueOf(targetPerson.get("name")))),
+        Map.class);
+
+    assertThat(graph.getStatusCode().is2xxSuccessful()).isTrue();
+    Map<String, Object> graphData = (Map<String, Object>) graph.getBody().get("graph");
+    List<Map<String, Object>> nodes = (List<Map<String, Object>>) graphData.get("nodes");
+    assertThat(nodes)
+        .extracting(node -> String.valueOf(node.get("id")))
+        .noneMatch(id -> id.contains("XLOOKUP"));
+    List<Map<String, Object>> edges = (List<Map<String, Object>>) graphData.get("edges");
+    assertThat(edges)
+        .extracting(edge -> edge.get("amount"))
+        .contains("向上层投资金额：25万");
+  }
+
+  @Test
+  void hiddenInvestorPeopleEnrichVisibleInvestorIdentityFromVisibleTable() throws Exception {
+    ResponseEntity<Map> list = rest.getForEntity("http://localhost:" + port + "/api/admin/people?size=1", Map.class);
+    Map<String, Object> targetPerson = ((List<Map<String, Object>>) list.getBody().get("rows")).get(0);
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+    MultiValueMap<String, Object> hiddenBody = new LinkedMultiValueMap<>();
+    hiddenBody.add("file", new ByteArrayResource(hiddenInvestorVisibleMappingWorkbook(
+        String.valueOf(targetPerson.get("name")),
+        "")) {
+      @Override
+      public String getFilename() {
+        return "隐名显性对应.xlsx";
+      }
+    });
+    rest.postForEntity(
+        "http://localhost:" + port + "/api/admin/imports/hidden-investors/import-excel",
+        new HttpEntity<>(hiddenBody, headers),
+        Map.class);
+
+    ResponseEntity<Map> people = rest.getForEntity(
+        "http://localhost:" + port + "/api/dashboard/hidden-investors/people?group=organizers&page=1&size=1",
+        Map.class);
+
+    assertThat(people.getStatusCode().is2xxSuccessful()).isTrue();
+    Map<String, Object> hiddenPerson = ((List<Map<String, Object>>) people.getBody().get("rows")).get(0);
+    assertThat(hiddenPerson.get("visibleInvestorName")).isEqualTo(targetPerson.get("name"));
+    assertThat(hiddenPerson.get("visibleInvestorIdNumber")).isEqualTo(targetPerson.get("idNumber"));
+    assertThat(hiddenPerson.get("visibleInvestorPhone")).isEqualTo(targetPerson.get("phone"));
+  }
+
+  @Test
+  void hiddenInvestorPeopleFallsBackToVisibleInvestorNameWhenVisibleIdDoesNotMatch() throws Exception {
+    ResponseEntity<Map> list = rest.getForEntity("http://localhost:" + port + "/api/admin/people?size=1", Map.class);
+    Map<String, Object> targetPerson = ((List<Map<String, Object>>) list.getBody().get("rows")).get(0);
+    HttpHeaders headers = new HttpHeaders();
+    headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+
+    MultiValueMap<String, Object> hiddenBody = new LinkedMultiValueMap<>();
+    hiddenBody.add("file", new ByteArrayResource(hiddenInvestorVisibleMappingWorkbook(
+        String.valueOf(targetPerson.get("name")),
+        "230100199901019999")) {
+      @Override
+      public String getFilename() {
+        return "隐名显性对应.xlsx";
+      }
+    });
+    rest.postForEntity(
+        "http://localhost:" + port + "/api/admin/imports/hidden-investors/import-excel",
+        new HttpEntity<>(hiddenBody, headers),
+        Map.class);
+
+    ResponseEntity<Map> people = rest.getForEntity(
+        "http://localhost:" + port + "/api/dashboard/hidden-investors/people?group=organizers&page=1&size=1",
+        Map.class);
+
+    assertThat(people.getStatusCode().is2xxSuccessful()).isTrue();
+    Map<String, Object> hiddenPerson = ((List<Map<String, Object>>) people.getBody().get("rows")).get(0);
+    assertThat(hiddenPerson.get("visibleInvestorName")).isEqualTo(targetPerson.get("name"));
+    assertThat(hiddenPerson.get("visibleInvestorIdNumber")).isEqualTo(targetPerson.get("idNumber"));
+    assertThat(hiddenPerson.get("visibleInvestorPhone")).isEqualTo(targetPerson.get("phone"));
   }
 
   private byte[] importWorkbook() throws Exception {
@@ -655,6 +1030,10 @@ class AdminPeopleControllerTest {
     }
   }
 
+  private String encode(String value) {
+    return URLEncoder.encode(value, StandardCharsets.UTF_8);
+  }
+
   private byte[] hiddenInvestorDashboardWorkbook() throws Exception {
     try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
       Sheet sheet = workbook.createSheet("Sheet1");
@@ -665,15 +1044,37 @@ class AdminPeopleControllerTest {
           "自身等级",
           "省内人员简易户籍",
           "属地派出所",
-          "持有中融信托产品份额总数");
+          "持有中融信托产品份额总数",
+          "到省金融监管局上访（次）",
+          "到职场上访（次）",
+          "到中融大厦上访（次）",
+          "涉及中融群个数",
+          "网络发声挑头数据",
+          "网络发声响应数据",
+          "户籍地址",
+          "现住址",
+          "包保所领导",
+          "包保所领导电话",
+          "包保民警",
+          "包保民警手机号",
+          "包保社区干部",
+          "包保社区干部电话");
       for (int index = 0; index < columns.size(); index++) {
         header.createCell(index).setCellValue(columns.get(index));
       }
       List<List<String>> rows = List.of(
-          List.of("隐名一级甲", "230100198001010101", "一级", "南岗", "南岗测试派出所", "120000000"),
-          List.of("隐名二级乙", "230100198001010102", "二级", "道里", "道里测试派出所", "60000000"),
-          List.of("隐名三级丙", "230200198001010103", "三级", "齐齐哈尔", "齐齐哈尔测试派出所", "4000000"),
-          List.of("隐名四级丁", "230100198001010104", "四级", "香坊", "香坊测试派出所", "1000000"));
+          List.of("隐名一级甲", "230100198001010101", "一级", "南岗", "南岗测试派出所", "120000000",
+              "2", "3", "4", "7", "1", "4", "户籍测试地址", "现住址测试", "所领导", "13100000001", "包保民警", "13200000002", "社区干部", "13300000003"),
+          List.of("隐名二级乙", "230100198001010102", "二级", "道里", "道里测试派出所", "60000000",
+              "", "", "", "", "", "", "", "", "", "", "", "", "", ""),
+          List.of("隐名三级丙", "230200198001010103", "三级", "齐齐哈尔", "齐齐哈尔测试派出所", "4000000",
+              "", "", "", "", "", "", "", "", "", "", "", "", "", ""),
+          List.of("隐名四级丁", "230100198001010104", "四级", "香坊", "香坊测试派出所", "1000000",
+              "", "", "", "", "", "", "", "", "", "", "", "", "", ""),
+          List.of("黑龙江未分级隐名", "230100198001010105", "", "南岗", "南岗未分级派出所", "800000",
+              "", "", "", "", "", "", "", "", "", "", "", "", "", ""),
+          List.of("外省未分级隐名", "110100198001010106", "", "北京", "北京未分级派出所", "900000",
+              "", "", "", "", "", "", "", "", "", "", "", "", "", ""));
       for (int rowIndex = 0; rowIndex < rows.size(); rowIndex++) {
         Row row = sheet.createRow(rowIndex + 1);
         List<String> values = rows.get(rowIndex);
@@ -737,6 +1138,52 @@ class AdminPeopleControllerTest {
       fourth.createCell(4).setCellValue("400000");
       fourth.createCell(5).setCellValue("1");
       fourth.createCell(6).setCellValue(otherIdNumber);
+      workbook.write(output);
+      return output.toByteArray();
+    }
+  }
+
+  private byte[] emptyLayeredFundRelationWorkbook() throws Exception {
+    try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+      Sheet sheet = workbook.createSheet("Sheet1");
+      Row header = sheet.createRow(0);
+      List<String> columns = List.of(
+          "显名投资人姓名",
+          "显名投资人证件号",
+          "一层隐名姓名",
+          "一层隐名证件号",
+          "一层隐名向显名投资金额",
+          "层级",
+          "上级身份证号");
+      for (int index = 0; index < columns.size(); index++) {
+        header.createCell(index).setCellValue(columns.get(index));
+      }
+      workbook.write(output);
+      return output.toByteArray();
+    }
+  }
+
+  private byte[] hiddenInvestorVisibleMappingWorkbook(String visibleName, String visibleIdNumber) throws Exception {
+    try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+      Sheet sheet = workbook.createSheet("Sheet1");
+      Row header = sheet.createRow(0);
+      List<String> columns = List.of(
+          "姓名",
+          "出资人身份证号",
+          "自身级别",
+          "出资金额",
+          "显性对应人",
+          "显性对应人身份证号");
+      for (int index = 0; index < columns.size(); index++) {
+        header.createCell(index).setCellValue(columns.get(index));
+      }
+      Row row = sheet.createRow(1);
+      row.createCell(0).setCellValue("隐名反查甲");
+      row.createCell(1).setCellValue("230100198001019901");
+      row.createCell(2).setCellValue("一级");
+      row.createCell(3).setCellValue("250000");
+      row.createCell(4).setCellValue(visibleName);
+      row.createCell(5).setCellValue(visibleIdNumber);
       workbook.write(output);
       return output.toByteArray();
     }

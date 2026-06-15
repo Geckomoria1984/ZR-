@@ -12,9 +12,23 @@ export const SECTION_PAGE_SIZE = 5;
 const AMOUNT_BUCKET_COLORS = ['#ff6e63', '#27d6ed', '#f35cae', '#32d2a3', '#ffd05d', '#8d7bff', '#60e6a8'];
 const REGION_CHART_COLORS = ['#6f66cc', '#2fd583', '#ff735f', '#23cbdc', '#ef66b4', '#9be05d', '#ffd05d', '#8a7cff'];
 const printableGroupKeys = ['organizers', 'responders', 'general', 'watch'];
-const compactDrawerGroupKeys = ['general', 'watch'];
-const HIDDEN_DASHBOARD_URL = 'index.html?scope=hidden&v=keep-chart-dialog-stack-20260611';
-const VISIBLE_DASHBOARD_URL = 'index.html?v=keep-chart-dialog-stack-20260611';
+const compactDrawerGroupKeys = [];
+const VISIBLE_DASHBOARD_TITLE = '黑龙江省ZR群体架构图';
+const VISIBLE_DASHBOARD_TOTAL = 1041;
+const HIDDEN_DASHBOARD_URL = 'index.html?scope=hidden&v=hidden-category-visible-20260615';
+const VISIBLE_DASHBOARD_URL = 'index.html?v=hidden-category-visible-20260615';
+const hiddenFallbackGroups = {
+  organizers: { title: '组织串联人员', count: 0, subtitle: '网上串联、现场组织或到场40次以上', tone: 'red', summary: '' },
+  responders: { title: '活跃响应人员', count: 0, subtitle: '到场20次以上、40次以下；群内响应、发表过极端言论或意见领袖', tone: 'yellow', summary: '' },
+  general: { title: '一般参与人员', count: 0, subtitle: '有到场行为', tone: 'blue', summary: '' },
+  watch: { title: '密切关注人员', count: 0, subtitle: '有过极端言论或意见领袖，未到场或仅群内响应', tone: 'teal', summary: '' },
+  arrived: { title: '到场非投资人', count: 0, subtitle: '户籍地分布', tone: 'blue', summary: '' },
+  hidden: { title: '其他隐名投资人', count: 0, subtitle: '户籍地分布', tone: 'teal', summary: '' },
+};
+
+export function categoryGroupKeysForScope(isHiddenScope = false) {
+  return ['general', 'watch'];
+}
 
 export function getPersonById(id) {
   return fallbackPeople.find((person) => person.id === id) || null;
@@ -49,10 +63,15 @@ export function buildDetailRows(person, options = {}) {
   const value = (key, fallback = '无') => person[key] || fallback;
   const investmentAmount = displayInvestmentAmount(person);
   const hiddenInvestorValue = options.hasFundHiddenInvestor ? '有' : '无';
+  const investorRelationLabel = options.isHiddenScope ? '是否存在显性投资人' : '背后是否存在隐性投资人';
+  const visibleInvestorDetail = visibleInvestorInfo(person);
+  const investorRelationValue = options.isHiddenScope
+    ? (visibleInvestorDetail || (options.hasVisibleInvestor ? '有' : '无'))
+    : hiddenInvestorValue;
   const rows = [
     { icon: '▥', label: '投资金额', value: investmentAmount, highlight: true },
     { icon: '◉', label: '其他投资', value: value('otherInvestment', '中植') },
-    { icon: '▣', label: '背后是否存在隐性投资人', value: hiddenInvestorValue, highlight: true, wide: true },
+    { icon: '▣', label: investorRelationLabel, value: investorRelationValue, highlight: true, wide: true },
     { icon: '⚡', label: '突出行为', value: value('behavior'), wide: true },
     { icon: '⌖', label: '到访情况', value: `${value('visitDetail', `到访${person.visits || 0}次`)}`, wide: true },
     { icon: '▤', label: '网络发声数据', value: value('onlineSpeech', '无'), wide: true },
@@ -80,6 +99,19 @@ export function buildDetailRows(person, options = {}) {
     rows.splice(16, 0, { icon: '☷', label: '包保责任人', value: person.responsiblePerson, wide: true });
   }
   return rows;
+}
+
+function visibleInvestorInfo(person = {}) {
+  const fundIdentity = person.fundIdentity || {};
+  const name = String(person.visibleInvestorName || fundIdentity.visibleName || '').trim();
+  const idNumber = String(person.visibleInvestorIdNumber || fundIdentity.visibleIdNumber || '').trim();
+  const phone = String(person.visibleInvestorPhone || fundIdentity.visiblePhone || '').trim();
+  if (!name && !idNumber && !phone) return '';
+  return [
+    `姓名：${name || '未填写'}`,
+    `身份证号：${idNumber || '未填写'}`,
+    `电话：${phone || '未填写'}`,
+  ].join('；');
 }
 
 export function filterPeople(sourcePeople, filters = {}) {
@@ -298,17 +330,21 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         : 'visible';
       return {
         dashboardScope: initialScope,
-        dashboardTitle: initialScope === 'hidden' ? '隐名投资人架构图' : '黑龙江省群体架构图',
-        dashboardTotal: initialScope === 'hidden' ? 0 : 1041,
-        people: fallbackPeople,
-        groups: fallbackGroups,
-        regionStats: fallbackRegionStats,
-        regionRows: fallbackRegionRows,
-        riskBars: fallbackRiskBars,
+        dashboardTitle: initialScope === 'hidden' ? '隐名投资人架构图' : VISIBLE_DASHBOARD_TITLE,
+        dashboardTotal: initialScope === 'hidden' ? 0 : VISIBLE_DASHBOARD_TOTAL,
+        people: initialScope === 'hidden' ? [] : fallbackPeople,
+        groups: initialScope === 'hidden' ? hiddenFallbackGroups : fallbackGroups,
+        regionStats: initialScope === 'hidden' ? [] : fallbackRegionStats,
+        regionRows: initialScope === 'hidden' ? [[], []] : fallbackRegionRows,
+        riskBars: initialScope === 'hidden' ? [] : fallbackRiskBars,
         amountBuckets: [],
         harbinRegionFullRows: [],
         provinceCityFullRows: [],
         outsideProvinceRows: [],
+        occupationRows: [],
+        genderRows: [],
+        libraryLevelRows: [],
+        clinicDepartmentRows: [],
         excelColumns: [],
         clinicBars: fallbackClinicBars,
         primaryGroups: ['organizers', 'responders'],
@@ -342,6 +378,10 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         cityDistrictStatsOpen: false,
         provinceCityStatsOpen: false,
         outsideProvinceStatsOpen: false,
+        occupationStatsOpen: false,
+        genderStatsOpen: false,
+        libraryStatsOpen: false,
+        clinicStatsOpen: false,
         selectedAmountBucket: null,
         amountBucketHeaders: [],
         amountBucketRows: [],
@@ -409,6 +449,9 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
       drawerTone() {
         return this.drawerGroupInfo.tone;
       },
+      categoryGroups() {
+        return categoryGroupKeysForScope(this.isHiddenScope);
+      },
       isCompactGroupDrawer() {
         return this.drawerMode === 'group' && compactDrawerGroupKeys.includes(this.drawerGroup);
       },
@@ -417,7 +460,6 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
           'drawer-grid-compact': this.isCompactGroupDrawer,
           'drawer-grid-report-blue': this.drawerGroup === 'general',
           'drawer-grid-report-green': this.drawerGroup === 'watch',
-          'drawer-grid-watch-optimal': this.drawerGroup === 'watch',
         };
       },
       drawerDisplayCount() {
@@ -444,8 +486,11 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         return buildProfileRows(this.activePerson);
       },
       detailRows() {
+        const hiddenProfile = profileUsesHiddenInvestorFields(this.activePerson, this.isHiddenScope);
         return buildDetailRows(this.activePerson, {
+          isHiddenScope: hiddenProfile,
           hasFundHiddenInvestor: this.activePerson?.fundHiddenInvestor === true || this.hasFundHiddenInvestor,
+          hasVisibleInvestor: this.activePerson?.fundVisibleInvestor === true,
         });
       },
       primaryAmountBucket() {
@@ -519,6 +564,70 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
       outsideProvinceSegments() {
         return regionSliceSegments(this.outsideProvinceChartRows.map((row) => [row.label, row.count]));
       },
+      occupationChartRows() {
+        return (this.occupationRows || [])
+          .filter(([name]) => !this.isRegionTotalChip(name))
+          .map(([name, count], index) => ({
+            key: `${name}-${index}`,
+            label: String(name || '未填写').trim() || '未填写',
+            count: Number(count || 0),
+            color: REGION_CHART_COLORS[index % REGION_CHART_COLORS.length],
+          }))
+          .filter((row) => row.label && row.count > 0);
+      },
+      occupationTotal() {
+        return this.occupationChartRows.reduce((sum, row) => sum + Number(row.count || 0), 0);
+      },
+      occupationSegments() {
+        return regionSliceSegments(this.occupationChartRows.map((row) => [row.label, row.count]));
+      },
+      occupationLabelSegments() {
+        const total = this.occupationTotal || 0;
+        if (!total) return [];
+        const majorSegments = this.occupationSegments
+          .filter((segment) => Number(segment.bucket?.count || 0) / total >= 0.07);
+        if (majorSegments.length) return majorSegments;
+        return [...this.occupationSegments]
+          .sort((left, right) => Number(right.bucket?.count || 0) - Number(left.bucket?.count || 0))
+          .slice(0, 5);
+      },
+      genderChartRows() {
+        return this.statRows(this.genderRows);
+      },
+      genderTotal() {
+        return this.genderChartRows.reduce((sum, row) => sum + Number(row.count || 0), 0);
+      },
+      genderSegments() {
+        return regionSliceSegments(this.genderChartRows.map((row) => [row.label, row.count]));
+      },
+      libraryLevelChartRows() {
+        return this.statRows(this.libraryLevelRows);
+      },
+      libraryLevelTotal() {
+        return this.libraryLevelChartRows.reduce((sum, row) => sum + Number(row.count || 0), 0);
+      },
+      libraryLevelSegments() {
+        return regionSliceSegments(this.libraryLevelChartRows.map((row) => [row.label, row.count]));
+      },
+      clinicDepartmentChartRows() {
+        return this.statRows(this.clinicDepartmentRows);
+      },
+      clinicDepartmentTotal() {
+        return this.clinicDepartmentChartRows.reduce((sum, row) => sum + Number(row.count || 0), 0);
+      },
+      clinicDepartmentSegments() {
+        return regionSliceSegments(this.clinicDepartmentChartRows.map((row) => [row.label, row.count]));
+      },
+      clinicDepartmentLabelSegments() {
+        const total = this.clinicDepartmentTotal || 0;
+        if (!total) return [];
+        const majorSegments = this.clinicDepartmentSegments
+          .filter((segment) => Number(segment.bucket?.count || 0) / total >= 0.07);
+        if (majorSegments.length) return majorSegments;
+        return [...this.clinicDepartmentSegments]
+          .sort((left, right) => Number(right.bucket?.count || 0) - Number(left.bucket?.count || 0))
+          .slice(0, 5);
+      },
       cityPieStyle() {
         return regionPieStyle(this.regionRows[0] || []);
       },
@@ -543,7 +652,7 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
       },
       fundGraphLargeSvgStyle() {
         const graph = this.fundRelationGraph || {};
-        const width = Math.max(1180, Number(graph.width || 1180));
+        const width = Math.max(300, Number(graph.width || 760));
         const height = Math.max(620, Number(graph.height || 620));
         return {
           width: `${width}px`,
@@ -588,6 +697,17 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
     },
     methods: {
       displayInvestmentAmount,
+      statRows(rows = []) {
+        return (rows || [])
+          .filter(([name]) => !this.isRegionTotalChip(name))
+          .map(([name, count], index) => ({
+            key: `${name}-${index}`,
+            label: String(name || '未填写').trim() || '未填写',
+            count: Number(count || 0),
+            color: REGION_CHART_COLORS[index % REGION_CHART_COLORS.length],
+          }))
+          .filter((row) => row.label && row.count > 0);
+      },
       async loadDashboard() {
         try {
           const endpoint = this.isHiddenScope ? '/api/dashboard/hidden-investors' : '/api/dashboard';
@@ -596,16 +716,22 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
 
           const payload = await response.json();
           this.people = (payload.people || this.people).map(normalizeApiPerson);
-          this.dashboardTitle = payload.title || this.dashboardTitle;
+          this.dashboardTitle = this.isHiddenScope ? (payload.title || this.dashboardTitle) : VISIBLE_DASHBOARD_TITLE;
           document.title = this.dashboardTitle;
           const sourceTotal = Number(payload.source?.riskPeople ?? payload.source?.totalRows ?? payload.total ?? 0);
-          this.dashboardTotal = sourceTotal || this.people.length || this.dashboardTotal;
+          this.dashboardTotal = this.isHiddenScope
+            ? (sourceTotal || this.people.length || this.dashboardTotal)
+            : VISIBLE_DASHBOARD_TOTAL;
           this.groups = payload.groups || this.groups;
           this.regionStats = payload.regionStats || this.regionStats;
           this.regionRows = payload.regionRows || this.regionRows;
           this.harbinRegionFullRows = payload.harbinRegionFullRows || [];
           this.provinceCityFullRows = payload.provinceCityFullRows || [];
           this.outsideProvinceRows = payload.outsideProvinceRows || [];
+          this.occupationRows = payload.occupationRows || [];
+          this.genderRows = payload.genderRows || [];
+          this.libraryLevelRows = payload.libraryLevelRows || [];
+          this.clinicDepartmentRows = payload.clinicDepartmentRows || [];
           this.riskBars = payload.riskBars || this.riskBars;
           this.amountBuckets = normalizeAmountBuckets(payload.amountBuckets || []);
           this.excelColumns = payload.excelColumns || [];
@@ -813,6 +939,18 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
       openOutsideProvinceStats() {
         this.outsideProvinceStatsOpen = true;
       },
+      openOccupationStats() {
+        this.occupationStatsOpen = true;
+      },
+      openGenderStats() {
+        this.genderStatsOpen = true;
+      },
+      openLibraryStats() {
+        this.libraryStatsOpen = true;
+      },
+      openClinicStats() {
+        this.clinicStatsOpen = true;
+      },
       provinceCityPercent(row) {
         const total = this.provinceCityTotal || 0;
         if (!total) return '0%';
@@ -833,6 +971,36 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         return `${value >= 10 ? value.toFixed(1) : value.toFixed(2)}%`;
       },
       outsideProvinceLabelTransform(segment) {
+        return this.provinceCityLabelTransform(segment);
+      },
+      occupationPercent(row) {
+        const total = this.occupationTotal || 0;
+        if (!total) return '0%';
+        const value = (Number(row?.count || 0) / total) * 100;
+        return `${value >= 10 ? value.toFixed(1) : value.toFixed(2)}%`;
+      },
+      occupationLabelTransform(segment) {
+        return this.provinceCityLabelTransform(segment);
+      },
+      genderPercent(row) {
+        const total = this.genderTotal || 0;
+        if (!total) return '0%';
+        const value = (Number(row?.count || 0) / total) * 100;
+        return `${value >= 10 ? value.toFixed(1) : value.toFixed(2)}%`;
+      },
+      libraryLevelPercent(row) {
+        const total = this.libraryLevelTotal || 0;
+        if (!total) return '0%';
+        const value = (Number(row?.count || 0) / total) * 100;
+        return `${value >= 10 ? value.toFixed(1) : value.toFixed(2)}%`;
+      },
+      clinicDepartmentPercent(row) {
+        const total = this.clinicDepartmentTotal || 0;
+        if (!total) return '0%';
+        const value = (Number(row?.count || 0) / total) * 100;
+        return `${value >= 10 ? value.toFixed(1) : value.toFixed(2)}%`;
+      },
+      clinicDepartmentLabelTransform(segment) {
         return this.provinceCityLabelTransform(segment);
       },
       amountBucketPercent(bucket) {
@@ -942,10 +1110,6 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
       },
       async loadFullProfilePerson(person) {
         if (!person) return person;
-        if (this.isHiddenScope) {
-          const identity = { name: person.name || '', idNumber: person.idNumber || '' };
-          return (await this.findPersonByGraphIdentity(identity)) || person;
-        }
         const id = String(person.id || '').trim();
         if (/^p\d+$/.test(id)) {
           try {
@@ -955,17 +1119,25 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
             // fall back to identity lookup below
           }
         }
+        if (this.isHiddenScope) {
+          const identity = { name: person.name || '', idNumber: person.idNumber || '' };
+          return (await this.findPersonByGraphIdentity(identity)) || person;
+        }
         const identity = { name: person.name || '', idNumber: person.idNumber || '' };
         return (await this.findPersonByGraphIdentity(identity)) || person;
       },
       async openGraphNodeProfile(node) {
         const identity = graphNodeIdentity(node);
         if (!identity.name && !identity.idNumber) return;
-        const matchedPerson = await this.findPersonByGraphIdentity(identity);
+        const matchedPerson = await this.findPersonByGraphIdentity(identity, {
+          preferVisible: shouldOpenVisibleProfileFromGraphNode(node, this.isHiddenScope),
+        });
         const person = matchedPerson || graphNodePerson(node, identity);
         await this.openProfile(person);
       },
-      async findPersonByGraphIdentity(identity) {
+      async findPersonByGraphIdentity(identity, options = {}) {
+        const visiblePerson = options.preferVisible ? await this.findVisiblePersonByIdentity(identity) : null;
+        if (visiblePerson) return visiblePerson;
         if (this.isHiddenScope) {
           const params = new URLSearchParams({ page: '1', size: '1' });
           if (identity.idNumber) params.set('idNumber', identity.idNumber);
@@ -980,6 +1152,9 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
             return null;
           }
         }
+        return this.findVisiblePersonByIdentity(identity);
+      },
+      async findVisiblePersonByIdentity(identity) {
         const params = new URLSearchParams({ page: '1', size: '1' });
         if (identity.idNumber) params.set('idNumber', identity.idNumber);
         else if (identity.name) params.set('name', identity.name);
@@ -998,6 +1173,11 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         if (tone === 'blue') return 'person-card-blue';
         if (tone === 'teal' || tone === 'green') return 'person-card-green';
         return '';
+      },
+      categoryTileClass(groupKey) {
+        const tone = this.groups[groupKey]?.tone || 'blue';
+        if (tone === 'teal' || tone === 'green') return 'category-teal';
+        return 'category-blue';
       },
       policeStationLines(value) {
         return policeStationLines(value);
@@ -1038,19 +1218,22 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
           }
           const payload = await response.json();
           this.fundRelationGraph = payload.graph || { nodes: [], edges: [], width: 760, height: 380 };
-          this.applyFundHiddenInvestor(person, graphHasLowerInvestor(this.fundRelationGraph));
+          this.applyFundGraphFlags(person, this.fundRelationGraph);
         } catch {
           this.fundRelationGraph = { nodes: [], edges: [], width: 760, height: 380 };
-          this.applyFundHiddenInvestor(person, false);
+          this.applyFundGraphFlags(person, this.fundRelationGraph);
         } finally {
           this.fundRelationLoading = false;
         }
       },
-      applyFundHiddenInvestor(person, hasLowerInvestor) {
+      applyFundGraphFlags(person, graph) {
         if (!person?.id || this.activePerson?.id !== person.id) return;
+        const hasLowerInvestor = graphHasLowerInvestor(graph, person);
+        const hasVisibleInvestor = this.isHiddenScope && graphHasVisibleInvestor(graph, person);
         this.activePerson = {
           ...this.activePerson,
           fundHiddenInvestor: hasLowerInvestor,
+          fundVisibleInvestor: hasVisibleInvestor,
           hiddenInvestor: hasLowerInvestor ? '有' : '无',
         };
       },
@@ -1069,6 +1252,7 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
           const params = new URLSearchParams();
           if (person.name) params.set('name', person.name);
           if (person.idNumber) params.set('idNumber', person.idNumber);
+          if (person.relatedPerson) params.set('relatedPerson', person.relatedPerson);
           const response = await fetch(apiUrl(`/api/admin/imports/related-people/graph?${params.toString()}`), { cache: 'no-store' });
           if (!response.ok) {
             this.relatedPersonGraph = { nodes: [], edges: [], width: 760, height: 380 };
@@ -1147,6 +1331,13 @@ if (typeof document !== 'undefined' && window.Vue && window.ElementPlus) {
         if (row.label.includes('身份证')) return maskIdBirthday(row.value);
         if (row.label.includes('联系') || row.label.includes('电话')) return maskPhoneTail(row.value);
         return row.value;
+      },
+      isSensitiveDetail(row) {
+        const label = String(row?.label || '');
+        return label.includes('金额')
+          || label.includes('身份证')
+          || label.includes('联系电话')
+          || label.includes('手机号');
       },
       displayExcelCell(row, header) {
         const value = row?.excelFields?.[header?.key] ?? '';
@@ -1333,20 +1524,53 @@ function fundNodeLevelRank(node = {}) {
   return 5;
 }
 
-function fundRelationPath(person = {}) {
+export function fundRelationPath(person = {}) {
   if (person.fundIdentity) {
     const params = new URLSearchParams();
     if (person.fundIdentity.idNumber) params.set('idNumber', person.fundIdentity.idNumber);
     if (person.fundIdentity.name) params.set('name', person.fundIdentity.name);
+    const visibleIdNumber = person.fundIdentity.visibleIdNumber || person.visibleInvestorIdNumber;
+    const visibleName = person.fundIdentity.visibleName || person.visibleInvestorName;
+    if (visibleIdNumber) params.set('visibleIdNumber', visibleIdNumber);
+    if (visibleName) params.set('visibleName', visibleName);
     return `/api/admin/fund-relations/identity?${params.toString()}`;
   }
   return `/api/admin/fund-relations/person/${person.id}`;
 }
 
-function graphHasLowerInvestor(graph = {}) {
+export function graphHasLowerInvestor(graph = {}, person = null) {
   const edges = Array.isArray(graph.edges) ? graph.edges : [];
   const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
+  if (person) {
+    const idNumber = String(person.idNumber || person.fundIdentity?.idNumber || '').trim();
+    const name = String(person.name || person.fundIdentity?.name || '').trim();
+    const currentNode = nodes.find((node) => {
+      const nodeId = String(node?.id || '');
+      const nodeName = String(node?.fullLabel || node?.label || '').trim();
+      return (!idNumber || nodeId === `id-${idNumber}`) && (!!idNumber || !name || nodeName === name);
+    }) || nodes.find((node) => String(node?.fullLabel || node?.label || '').trim() === name)
+      || nodes.find((node) => node?.primary === true);
+    if (currentNode?.id) {
+      return edges.some((edge) => String(edge?.target || '') === String(currentNode.id));
+    }
+  }
   return edges.length > 0 || nodes.some((node) => String(node?.primary) !== 'true');
+}
+
+export function graphHasVisibleInvestor(graph = {}, person = null) {
+  const nodes = Array.isArray(graph.nodes) ? graph.nodes : [];
+  return nodes.some((node) => String(node?.level || '') === '显名投资人');
+}
+
+export function shouldOpenVisibleProfileFromGraphNode(node = {}, isHiddenScope = false) {
+  return Boolean(isHiddenScope) && String(node?.level || '') === '显名投资人';
+}
+
+export function profileUsesHiddenInvestorFields(person = {}, isHiddenScope = false) {
+  if (!isHiddenScope) return false;
+  const id = String(person?.id || '').trim();
+  if (/^p\d+$/.test(id)) return false;
+  return String(person?.risk || '') !== '显名投资人';
 }
 
 function groupRiskLabel(groupKey) {

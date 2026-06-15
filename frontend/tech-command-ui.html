@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>强科技感首页 UI 概念</title>
+    <link rel="stylesheet" href="/src/tech-command-ui.css">
+  </head>
+  <body>
+    <main id="tech-ui" class="tech-ui">
+      <header class="hud-header">
+        <div class="brand-block">
+          <span>HEILONGJIANG SITUATION COMMAND</span>
+          <h1>黑龙江省群体架构图 <b></b></h1>
+        </div>
+        <nav class="mode-tabs" aria-label="态势模式">
+          <button class="active" type="button" data-mode="overview">态势总览</button>
+          <button type="button" data-mode="network">关系图谱</button>
+          <button type="button" data-mode="response">处置队列</button>
+        </nav>
+        <div class="live-meta">
+          <span class="pulse"></span>
+          <strong>LIVE</strong>
+          <em>数据同步中</em>
+        </div>
+      </header>
+
+      <section class="control-strip">
+        <label class="search-box">
+          <span>检索</span>
+          <input type="search" placeholder="姓名 / 属地 / 行为 / 职业">
+        </label>
+        <div class="filter-group" aria-label="人员分类"></div>
+        <div class="risk-group" aria-label="风险等级"></div>
+        <button class="scan-toggle" type="button">扫描模式</button>
+      </section>
+
+      <section class="tech-layout">
+        <aside class="left-deck">
+          <div class="deck-card command-score">
+            <span>总人数</span>
+            <strong class="total-count">0</strong>
+            <i>全量人员态势库</i>
+          </div>
+          <div class="deck-card group-matrix"></div>
+          <div class="deck-card region-radar"></div>
+        </aside>
+
+        <section class="center-stage">
+          <div class="stage-frame">
+            <div class="map-grid">
+              <div class="province-shape"></div>
+              <div class="scan-line"></div>
+              <div class="region-nodes"></div>
+            </div>
+            <div class="network-layer"></div>
+            <div class="stage-caption">
+              <strong>区域态势联动</strong>
+              <span>点击节点筛选属地，点击人员卡打开档案</span>
+            </div>
+          </div>
+          <div class="priority-row"></div>
+        </section>
+
+        <aside class="right-deck">
+          <div class="deck-card risk-core"></div>
+          <div class="deck-card action-queue"></div>
+          <div class="deck-card mini-log"></div>
+        </aside>
+      </section>
+
+      <section class="people-dock"></section>
+
+      <aside class="person-drawer" aria-hidden="true">
+        <button class="drawer-close" type="button" aria-label="关闭">×</button>
+        <div class="drawer-content"></div>
+      </aside>
+    </main>
+    <script type="module" src="/src/tech-command-ui.js"></script>
+  </body>
+</html>

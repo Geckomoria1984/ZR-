@@ -1101,16 +1101,18 @@ h1 span,
 }
 
 .province-city-pie {
-  width: min(78%, 220px);
-  aspect-ratio: 1;
-  margin-top: 18px;
+  width: 150px;
+  height: 150px;
+  max-width: 100%;
+  margin: 4px auto 0;
   filter: drop-shadow(0 0 18px rgba(99, 168, 230, 0.42));
 }
 
 .amount-donut-svg {
-  width: min(78%, 220px);
-  aspect-ratio: 1;
-  margin-top: 18px;
+  width: 150px;
+  height: 150px;
+  max-width: 100%;
+  margin: 4px auto 0;
   filter: drop-shadow(0 0 18px rgba(99, 168, 230, 0.42));
 }
 
@@ -1585,6 +1587,61 @@ h1 span,
 .ring-lines span:nth-child(2) { right: 0; top: 58px; }
 .ring-lines span:nth-child(3) { right: 11px; top: 80px; background: #ff755d; }
 .ring-lines span:nth-child(4) { right: 30px; bottom: 8px; background: #28c9e2; width: 10px; height: 10px; }
+
+.occupation-chart-card {
+  cursor: pointer;
+}
+
+.occupation-pie {
+  width: 150px;
+  height: 150px;
+  display: block;
+  margin: 4px auto 0;
+  overflow: visible;
+  filter:
+    drop-shadow(0 12px 18px rgba(0, 9, 34, 0.34))
+    drop-shadow(0 0 18px rgba(114, 226, 255, 0.16));
+}
+
+.occupation-pie path {
+  stroke: rgba(255, 255, 255, 0.22);
+  stroke-width: 0.42;
+}
+
+.occupation-center-disc {
+  fill: rgba(7, 21, 55, 0.88);
+  stroke: rgba(255, 255, 255, 0.82);
+  stroke-width: 0.7;
+}
+
+.occupation-layout {
+  grid-template-columns: minmax(480px, 0.86fr) minmax(620px, 1.14fr);
+}
+
+.occupation-dialog .province-city-row {
+  cursor: default;
+}
+
+.occupation-dialog .province-city-row:hover,
+.occupation-dialog .province-city-row:focus-visible {
+  background: linear-gradient(90deg, rgba(29, 74, 146, 0.72), rgba(18, 50, 115, 0.46));
+  outline: none;
+}
+
+.occupation-list {
+  max-height: 72vh;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.occupation-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.occupation-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(117, 225, 255, 0.38);
+}
 
 .radial-bars {
   position: relative;
@@ -2117,6 +2174,11 @@ h1 span,
   white-space: nowrap;
 }
 
+.fund-node-html .fund-node-amount {
+  font-size: inherit;
+  line-height: inherit;
+}
+
 .fund-node-html::-webkit-scrollbar {
   width: 0;
   height: 0;
@@ -2228,9 +2290,10 @@ h1 span,
 .detail-line {
   min-height: 47px;
   max-height: 78px;
-  display: flex;
+  display: grid;
+  grid-template-columns: 30px max-content 18px minmax(0, 1fr);
   align-items: center;
-  gap: 9px;
+  column-gap: 6px;
   border-bottom: 1px dashed #e6e9ee;
   color: #4b515b;
   font-size: 20px;
@@ -2253,6 +2316,12 @@ h1 span,
   color: #555e6c;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.detail-colon {
+  color: #555e6c;
+  font-weight: 800;
+  text-align: center;
 }
 
 .detail-line strong {
@@ -4130,6 +4199,82 @@ body::before {
   border-radius: 999px;
 }
 
+/* Final guard: detail rows use icon / label / colon / value columns. */
+.profile-dialog .detail-line,
+.profile-dialog .detail-line-wide,
+.profile-dialog .detail-line:nth-child(n) {
+  display: grid !important;
+  grid-template-columns: 30px minmax(170px, 190px) 16px minmax(0, 1fr) !important;
+  align-items: start !important;
+  column-gap: 8px !important;
+}
+
+.profile-dialog .detail-label {
+  white-space: normal !important;
+  word-break: keep-all !important;
+  overflow-wrap: normal !important;
+  line-height: 1.25 !important;
+}
+
+.profile-dialog .detail-colon {
+  display: block !important;
+  margin-top: 2px !important;
+  color: #8aa9c0 !important;
+  font-size: 16px !important;
+  font-weight: 900 !important;
+  text-align: center !important;
+}
+
+.profile-dialog .detail-line strong,
+.profile-dialog .detail-line:nth-child(n) strong {
+  grid-column: 4 !important;
+  min-width: 0 !important;
+  margin-top: 0 !important;
+}
+
+.profile-dialog .detail-line-icon {
+  grid-column: 1 !important;
+}
+
+.profile-dialog .detail-label {
+  grid-column: 2 !important;
+}
+
+@media (max-width: 900px) {
+  .profile-dialog .el-dialog {
+    width: 98vw !important;
+    margin: 1vh auto !important;
+  }
+
+  .profile-dialog .detail-layout {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    height: calc(100% - 58px) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding: 12px !important;
+  }
+
+  .profile-dialog .detail-sidebar {
+    width: 100% !important;
+    max-height: none !important;
+  }
+
+  .profile-dialog .detail-fields {
+    width: 100% !important;
+    min-width: 0 !important;
+    grid-template-columns: 1fr !important;
+    overflow: visible !important;
+  }
+
+  .profile-dialog .detail-line,
+  .profile-dialog .detail-line-wide,
+  .profile-dialog .detail-line:nth-child(n) {
+    width: 100% !important;
+    grid-template-columns: 30px minmax(118px, 34%) 16px minmax(0, 1fr) !important;
+  }
+}
+
 /* Related person graph, database-backed. */
 .detail-relation-actions {
   display: grid !important;
@@ -4557,4 +4702,210 @@ body:not(.admin-body) .chart-card h3 {
   color: #eaf8ff !important;
   border-left-color: var(--scheme-command-cyan);
   border-bottom-color: rgba(168, 226, 255, 0.24);
+}
+
+/* Hidden investor UI trial 06: minimal data-cabin style, 2026-06-15 */
+body:not(.admin-body) .dashboard-shell-hidden {
+  color: #162236;
+  background:
+    radial-gradient(circle at 8% 0%, rgba(92, 183, 255, 0.14), transparent 28rem),
+    radial-gradient(circle at 90% 16%, rgba(110, 231, 255, 0.14), transparent 30rem),
+    linear-gradient(180deg, #ffffff 0%, #f6fbff 46%, #eef7ff 100%);
+}
+
+body:not(.admin-body) .dashboard-shell-hidden::before,
+body:not(.admin-body) .dashboard-shell-hidden::after {
+  border-color: rgba(43, 117, 177, 0.08);
+  background:
+    linear-gradient(90deg, transparent 0 18%, rgba(76, 151, 208, 0.07) 18% 19%, transparent 19% 81%, rgba(76, 151, 208, 0.07) 81% 82%, transparent 82%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.74), rgba(234, 247, 255, 0.18));
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .top-banner {
+  background:
+    linear-gradient(90deg, rgba(255,255,255,0), rgba(71, 157, 222, 0.1), rgba(255,255,255,0)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(241, 249, 255, 0.88) 78%, transparent 100%);
+  box-shadow: 0 14px 34px rgba(35, 89, 132, 0.1);
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .title-frame {
+  border-top-color: rgba(64, 144, 204, 0.3);
+}
+
+body:not(.admin-body) .dashboard-shell-hidden h1 {
+  color: #12233e;
+  letter-spacing: 0.08em;
+  text-shadow: 0 10px 26px rgba(49, 122, 177, 0.12);
+}
+
+body:not(.admin-body) .dashboard-shell-hidden h1 span,
+body:not(.admin-body) .dashboard-shell-hidden .section-title span,
+body:not(.admin-body) .dashboard-shell-hidden .category-tile span,
+body:not(.admin-body) .dashboard-shell-hidden .drawer-head span {
+  color: #1f84d8;
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .admin-entry-link {
+  color: #155f9e;
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(68, 151, 214, 0.22);
+  box-shadow: 0 10px 24px rgba(40, 112, 168, 0.1);
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .privacy-toggle {
+  color: #fff;
+  background: rgba(255, 93, 108, 0.8);
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .diamond-btn {
+  background: linear-gradient(180deg, #5ac7ff, #347fca);
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .people-section {
+  color: #1a2a3f;
+  background:
+    linear-gradient(90deg, rgba(105, 181, 238, 0.08), transparent 34%, transparent 66%, rgba(99, 210, 235, 0.07)),
+    rgba(255, 255, 255, 0.86);
+  border-color: rgba(64, 144, 204, 0.16);
+  box-shadow: 0 18px 42px rgba(39, 92, 132, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.86);
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .section-head {
+  color: #1a2a3f;
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .area-summary {
+  color: #2b4b68 !important;
+  text-shadow: none !important;
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .section-title,
+body:not(.admin-body) .dashboard-shell-hidden .title-button,
+body:not(.admin-body) .dashboard-shell-hidden .title-button.open-list {
+  color: #12233e !important;
+  text-shadow: none !important;
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .section-title small {
+  color: #5f7f98;
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .legend .el-radio-button__inner {
+  color: #24506f;
+  background: rgba(255, 255, 255, 0.86);
+  border-color: rgba(64, 144, 204, 0.18);
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .legend .el-radio-button__original-radio:checked + .el-radio-button__inner {
+  color: #fff;
+  background: linear-gradient(180deg, #43a7ed, #247ccc);
+  box-shadow: none;
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .person-card {
+  color: #1c293a;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(239, 248, 255, 0.84));
+  border-color: rgba(64, 144, 204, 0.14);
+  box-shadow: 0 14px 28px rgba(49, 104, 145, 0.12);
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .person-card-yellow {
+  background:
+    linear-gradient(135deg, rgba(255, 250, 230, 0.96), rgba(255, 244, 190, 0.78));
+  border-color: rgba(232, 178, 56, 0.22);
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .person-mini-content strong,
+body:not(.admin-body) .dashboard-shell-hidden .person-mini-content span,
+body:not(.admin-body) .dashboard-shell-hidden .person-mini-content em,
+body:not(.admin-body) .dashboard-shell-hidden .person-mini-content b {
+  color: #162236;
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .portrait {
+  box-shadow: 0 8px 18px rgba(48, 101, 142, 0.16);
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .carousel-status {
+  color: #41617d;
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .category-blue,
+body:not(.admin-body) .dashboard-shell-hidden .category-teal {
+  color: #16324b;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.94), rgba(228, 244, 255, 0.86));
+  border-color: rgba(64, 144, 204, 0.18);
+  box-shadow: 0 14px 28px rgba(49, 104, 145, 0.12);
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .category-tile strong {
+  color: #12233e;
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .category-tile small {
+  color: #5f7f98;
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .region-panel {
+  color: #162236;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(64, 144, 204, 0.16);
+  box-shadow: 0 16px 34px rgba(49, 104, 145, 0.12);
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .region-panel h2 {
+  color: #12233e;
+  background: linear-gradient(180deg, rgba(232, 247, 255, 0.96), rgba(213, 239, 255, 0.86)) !important;
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .region-chip {
+  color: #18364f;
+  background: rgba(228, 246, 255, 0.88);
+  border-color: rgba(64, 144, 204, 0.16);
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .region-chip-alt {
+  background: rgba(214, 243, 236, 0.88);
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .region-chip-total {
+  background: rgba(255, 244, 202, 0.9);
+  border-color: rgba(232, 178, 56, 0.28);
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .pill-button {
+  color: #16324b;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(226, 243, 255, 0.88));
+  box-shadow: 0 12px 26px rgba(49, 104, 145, 0.12);
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .pill-button small {
+  color: #1f84d8;
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .chart-card {
+  color: #162236;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(237, 248, 255, 0.9)) !important;
+  border-color: rgba(64, 144, 204, 0.16) !important;
+  box-shadow: 0 16px 32px rgba(49, 104, 145, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .chart-card h3 {
+  color: #12233e !important;
+  border-left-color: #42a7ed;
+  border-bottom-color: rgba(64, 144, 204, 0.14);
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .donut,
+body:not(.admin-body) .dashboard-shell-hidden .pie,
+body:not(.admin-body) .dashboard-shell-hidden .district-donut-svg,
+body:not(.admin-body) .dashboard-shell-hidden .amount-donut-svg {
+  filter: drop-shadow(0 12px 22px rgba(49, 104, 145, 0.12));
+}
+
+body:not(.admin-body) .dashboard-shell-hidden .drawer-panel,
+body:not(.admin-body) .dashboard-shell-hidden .profile-dialog .el-dialog {
+  color: #162236;
 }

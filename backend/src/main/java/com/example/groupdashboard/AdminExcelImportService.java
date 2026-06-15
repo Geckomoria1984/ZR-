@@ -11,6 +11,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.DataFormatter;
@@ -27,6 +29,12 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class AdminExcelImportService {
   private static final TypeReference<LinkedHashMap<String, Object>> MAP_TYPE = new TypeReference<>() {};
+  private static final Pattern MEDICAL_SEGMENT_PATTERN = Pattern.compile("(?=\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}\\s+\\d{1,2}:\\d{2})");
+  private static final Pattern OUTPATIENT_DEPARTMENT_PATTERN = Pattern.compile("在(.{2,80}?门诊)");
+  private static final Pattern FAMILY_RELATION_SEGMENT = Pattern.compile(
+      "(配偶|丈夫|妻子|父亲|母亲|儿子|女儿|父子|母子|子女)[：:,，、]?(.+?)(?=(?:配偶|丈夫|妻子|父亲|母亲|儿子|女儿|父子|母子|子女)[：:,，、]|[\\n;；]|$)");
+  private static final Pattern ID_NUMBER_PATTERN = Pattern.compile("\\d{6}\\d{8}\\d{3}[0-9Xx]");
+  private static final Pattern PHONE_PATTERN = Pattern.compile("(?<!\\d)1\\d{10}(?!\\d)");
   private static final List<String> HARBIN_AREAS = List.of(
       "道里", "南岗", "道外", "平房", "松北", "香坊", "呼兰", "阿城",
       "双城", "依兰", "方正", "宾县", "巴彦", "木兰", "通河", "延寿",
@@ -42,13 +50,18 @@ public class AdminExcelImportService {
       "香港", "澳门");
   private final JdbcTemplate jdbcTemplate;
   private final ObjectMapper objectMapper;
+  private final AdminPeopleService adminPeopleService;
   private volatile Map<String, Object> hiddenDashboardCache;
   private volatile List<Map<String, Object>> hiddenInvestorPeopleCache;
   private volatile List<Map<String, Object>> hiddenInvestorHeadersCache;
 
-  public AdminExcelImportService(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+  public AdminExcelImportService(
+      JdbcTemplate jdbcTemplate,
+      ObjectMapper objectMapper,
+      AdminPeopleService adminPeopleService) {
     this.jdbcTemplate = jdbcTemplate;
     this.objectMapper = objectMapper;
+    this.adminPeopleService = adminPeopleService;
   }
 
   @Transactional
@@ -100,6 +113,9 @@ public class AdminExcelImportService {
         .filter(person -> !String.valueOf(person.getOrDefault("group", "")).isBlank())
         .toList();
     List<Map<String, Object>> heilongjiangPeople = allPeople.stream()
+        .filter(this::isHeilongjiangHiddenInvestor)
+        .toList();
+    List<Map<String, Object>> heilongjiangUnclassifiedPeople = allPeople.stream()
         .filter(this::isHeilongjiangUnclassifiedHiddenInvestor)
         .toList();
     Map<String, Integer> groupCounts = new LinkedHashMap<>();
@@ -121,17 +137,16 @@ public class AdminExcelImportService {
 
     for (Map<String, Object> person : allPeople) {
       String outsideProvince = outsideProvince(person);
-      if (!outsideProvince.isBlank()) {
-        outsideProvinceCounts.merge(outsideProvince, 1L, Long::sum);
-      }
+      outsideProvinceCounts.merge(firstNonBlank(outsideProvince, "未填写"), 1L, Long::sum);
       if (!isHeilongjiangHiddenInvestor(person)) continue;
       String city = String.valueOf(person.getOrDefault("householdCity", ""));
       String district = String.valueOf(person.getOrDefault("householdDistrict", ""));
-      if (isHarbinCity(city) || isHarbinArea(district)) {
-        String area = dashboardArea(district);
+      String displayDistrict = String.valueOf(person.getOrDefault("district", ""));
+      if (isHarbinCity(city) || isHarbinArea(district) || isHarbinArea(displayDistrict)) {
+        String area = dashboardArea(firstNonBlank(district, displayDistrict));
         harbinFullCounts.merge(isHarbinArea(area) ? area : "哈尔滨未填写", 1L, Long::sum);
       } else {
-        String provinceCity = dashboardArea(city);
+        String provinceCity = dashboardArea(firstNonBlank(city, displayDistrict));
         if (isHeilongjiangNonHarbinCity(provinceCity)) {
           provinceFullCounts.merge(provinceCity, 1L, Long::sum);
         } else {
@@ -143,11 +158,12 @@ public class AdminExcelImportService {
     for (Map<String, Object> person : heilongjiangPeople) {
       String city = String.valueOf(person.getOrDefault("householdCity", ""));
       String district = String.valueOf(person.getOrDefault("householdDistrict", ""));
-      if (isHarbinCity(city) || isHarbinArea(district)) {
-        String area = dashboardArea(district);
+      String displayDistrict = String.valueOf(person.getOrDefault("district", ""));
+      if (isHarbinCity(city) || isHarbinArea(district) || isHarbinArea(displayDistrict)) {
+        String area = dashboardArea(firstNonBlank(district, displayDistrict));
         harbinCounts.merge(isHarbinArea(area) ? area : "哈尔滨未填写", 1L, Long::sum);
       } else {
-        String provinceCity = dashboardArea(city);
+        String provinceCity = dashboardArea(firstNonBlank(city, displayDistrict));
         if (isHeilongjiangNonHarbinCity(provinceCity)) {
           provinceCounts.merge(provinceCity, 1L, Long::sum);
         } else {
@@ -167,7 +183,7 @@ public class AdminExcelImportService {
     Map<String, Object> dashboard = new LinkedHashMap<>();
     dashboard.put("scope", "hidden");
     dashboard.put("title", "隐名投资人架构图");
-    dashboard.put("groups", hiddenGroups(groupCounts, groupDistrictCounts, heilongjiangPeople.size()));
+    dashboard.put("groups", hiddenGroups(groupCounts, groupDistrictCounts, heilongjiangUnclassifiedPeople.size()));
     dashboard.put("people", previewPeople);
     dashboard.put("adminPeople", previewPeople);
     dashboard.put("excelColumns", headers);
@@ -176,6 +192,10 @@ public class AdminExcelImportService {
     dashboard.put("harbinRegionFullRows", harbinRegionRows(harbinFullCounts));
     dashboard.put("provinceCityFullRows", provinceCityRows(provinceFullCounts));
     dashboard.put("outsideProvinceRows", outsideProvinceRows(outsideProvinceCounts));
+    dashboard.put("occupationRows", occupationRows(allPeople));
+    dashboard.put("genderRows", genderRows(allPeople));
+    dashboard.put("libraryLevelRows", libraryLevelRows(allPeople));
+    dashboard.put("clinicDepartmentRows", clinicDepartmentRows(allPeople));
     dashboard.put("riskBars", riskBars(groupCounts));
     dashboard.put("amountBuckets", amountBuckets(allPeople));
     dashboard.put("clinicBars", clinicBars());
@@ -203,7 +223,7 @@ public class AdminExcelImportService {
         "total", filtered.size());
   }
 
-  public Map<String, Object> relatedPeopleGraph(String name, String idNumber) {
+  public Map<String, Object> relatedPeopleGraph(String name, String idNumber, String relatedPersonText) {
     ImportType type = ImportType.RELATED_PEOPLE;
     ensureSchema(type);
     List<Map<String, Object>> headers = loadHeaders(type);
@@ -258,6 +278,26 @@ public class AdminExcelImportService {
       index++;
     }
 
+    for (RelatedFieldRelation relation : relatedFieldRelations(relatedPersonText)) {
+      RelatedIdentity display = relation.identity();
+      String relatedKey = relatedIdentityKey(display);
+      if (!relatedKey.isBlank() && seenRelated.containsKey(relatedKey)) continue;
+      if (!relatedKey.isBlank()) seenRelated.put(relatedKey, true);
+
+      String nodeId = "related-field-" + index;
+      int y = 100 + index * 165;
+      nodes.add(graphNode(nodeId, firstNonBlank(display.name(), "未填写"), display.idNumber(), relation.relation(), display.phone(), display.occupation(), 690, y, false));
+      edges.add(Map.of("source", "primary", "target", nodeId, "relation", relation.relation(), "rowIndex", "field-" + index));
+      relatedRows.add(Map.of(
+          "name", firstNonBlank(display.name(), "未填写"),
+          "idNumber", display.idNumber(),
+          "phone", display.phone(),
+          "occupation", display.occupation(),
+          "relation", relation.relation(),
+          "fields", Map.of("来源", "关联人字段")));
+      index++;
+    }
+
     int height = Math.max(430, 175 + Math.max(1, index) * 165);
     primary.put("y", height / 2);
     return Map.of(
@@ -267,6 +307,62 @@ public class AdminExcelImportService {
             .map(row -> firstNonBlank(String.valueOf(row.get("relation")), "关联人") + "：" + firstNonBlank(String.valueOf(row.get("name")), "未填写"))
             .toList(),
         "graph", Map.of("nodes", nodes, "edges", edges, "width", 930, "height", height));
+  }
+
+  private List<RelatedFieldRelation> relatedFieldRelations(String relatedPersonText) {
+    String text = firstNonBlank(relatedPersonText).replace("\r", "\n").trim();
+    if (text.isBlank() || "未填写".equals(text) || "无".equals(text)) return List.of();
+
+    List<RelatedFieldRelation> relations = new ArrayList<>();
+    Matcher matcher = FAMILY_RELATION_SEGMENT.matcher(text);
+    while (matcher.find()) {
+      RelatedFieldRelation relation = relatedFieldRelation(matcher.group(1), matcher.group(2));
+      if (relation != null) relations.add(relation);
+    }
+    return relations;
+  }
+
+  private RelatedFieldRelation relatedFieldRelation(String rawRelation, String rawDetail) {
+    String relation = definiteFamilyRelation(rawRelation);
+    if (relation.isBlank()) return null;
+
+    String rest = firstNonBlank(rawDetail).replaceFirst("^[：:,，、\\s]+", "").trim();
+    if (rest.isBlank()) return null;
+
+    String idNumber = firstRegex(ID_NUMBER_PATTERN, rest);
+    String restWithoutId = rest.replace(idNumber, " ");
+    String phone = firstRegex(PHONE_PATTERN, restWithoutId);
+    String cleaned = rest
+        .replace(idNumber, " ")
+        .replace(phone, " ")
+        .replaceAll("[,，、]+", " ")
+        .replaceAll("\\s+", " ")
+        .trim();
+    String name = "";
+    String occupation = "";
+    for (String token : cleaned.split("\\s+")) {
+      if (token.isBlank()) continue;
+      if (name.isBlank() && looksLikeChineseName(token)) {
+        name = token;
+      } else if (occupation.isBlank()) {
+        occupation = token;
+      }
+    }
+    RelatedIdentity identity = new RelatedIdentity(name, idNumber, phone, occupation);
+    return identity.isBlank() ? null : new RelatedFieldRelation(relation, identity);
+  }
+
+  private String definiteFamilyRelation(String text) {
+    String compact = firstNonBlank(text).replaceAll("^\\s+", "");
+    for (String relation : List.of("配偶", "丈夫", "妻子", "父亲", "母亲", "儿子", "女儿", "父子", "母子", "子女")) {
+      if (compact.startsWith(relation)) return relation;
+    }
+    return "";
+  }
+
+  private String firstRegex(Pattern pattern, String text) {
+    Matcher matcher = pattern.matcher(firstNonBlank(text));
+    return matcher.find() ? matcher.group() : "";
   }
 
   private List<Map<String, Object>> hiddenInvestorHeadersSnapshot() {
@@ -434,6 +530,16 @@ public class AdminExcelImportService {
         "省内人员简易户籍", "户籍地", "户籍地址", "属地", "属地划分", "地区", "所在地"))));
     double amount = toDouble(fieldByLabels(fields, labelByKey, List.of(
         "持有中融信托产品份额总数", "投资金额", "金额", "向显名投资金额", "向上一层投资金额", "实收信托")));
+    String visibleInvestorName = cleanImportedLookupValue(fieldByLabels(fields, labelByKey, List.of("显性对应人", "显性投资人", "显名投资人")));
+    String visibleInvestorIdNumber = cleanImportedIdNumber(fieldByLabels(fields, labelByKey, List.of("显性对应人身份证号", "显性投资人身份证号", "显名投资人证件号", "显名投资人身份证号")));
+    String visibleInvestorPhone = cleanImportedLookupValue(fieldByLabels(fields, labelByKey, List.of(
+        "显性对应人电话", "显性对应人手机号", "显性对应人联系方式",
+        "显性投资人电话", "显性投资人手机号", "显性投资人联系方式",
+        "显名投资人电话", "显名投资人手机号", "显名投资人联系方式")));
+    VisibleInvestorIdentity visibleInvestor = visibleInvestorIdentity(
+        visibleInvestorName,
+        visibleInvestorIdNumber,
+        visibleInvestorPhone);
 
     Map<String, Object> person = new LinkedHashMap<>();
     person.put("id", "hidden-" + firstNonBlank(idNumber, String.valueOf(row.getOrDefault("rowIndex", index + 1))));
@@ -445,7 +551,7 @@ public class AdminExcelImportService {
     person.put("trustShareAmount", amount);
     person.put("trustShareText", moneyText(String.valueOf(amount)));
     person.put("occupation", firstNonBlank(fieldByLabels(fields, labelByKey, List.of("从业单位", "职业分类", "职业")), "未填写"));
-    person.put("behavior", firstNonBlank(fieldByLabels(fields, labelByKey, List.of("突出行为", "备注", "关系说明")), riskLabel(group)));
+    person.put("behavior", firstNonBlank(fieldByLabels(fields, labelByKey, List.of("定级原因", "突出行为", "备注", "关系说明")), "未填写"));
     person.put("visits", toInt(firstNonBlank(fieldByLabels(fields, labelByKey, List.of("到访次数", "来访次数")), "0")));
     person.put("policeStation", firstNonBlank(fieldByLabels(fields, labelByKey, List.of("属地派出所", "派出所", "属地单位")), "未填写"));
     person.put("district", district);
@@ -457,23 +563,122 @@ public class AdminExcelImportService {
     person.put("risk", riskLabel(group));
     person.put("avatarIndex", index);
     person.put("phone", firstNonBlank(fieldByLabels(fields, labelByKey, List.of("联系电话", "手机号", "电话")), "未填写"));
-    person.put("address", firstNonBlank(fieldByLabels(fields, labelByKey, List.of("户籍地址", "联系地址", "地址")), "未填写"));
+    person.put("address", firstNonBlank(fieldByLabels(fields, labelByKey, List.of("户籍地", "户籍地址", "联系地址", "地址")), "未填写"));
     person.put("currentAddress", firstNonBlank(fieldByLabels(fields, labelByKey, List.of("现住址", "当前位置")), "未填写"));
     person.put("nation", firstNonBlank(fieldByLabels(fields, labelByKey, List.of("民族")), "汉族"));
-    person.put("otherInvestment", "隐名投资");
+    person.put("otherInvestment", firstNonBlank(fieldByLabels(fields, labelByKey, List.of("其他投资")), "隐名投资"));
     person.put("hiddenInvestor", "有");
-    person.put("visitDetail", "隐名投资人导入数据");
-    person.put("onlineSpeech", "无");
+    person.put("visitDetail", hiddenVisitDetail(fields, labelByKey));
+    person.put("onlineSpeech", hiddenOnlineSpeech(fields, labelByKey));
     person.put("socialAccount", "未填写");
     person.put("vehicle", "无");
     person.put("libraryStatus", hiddenLibraryStatus(fields, labelByKey, group));
     person.put("policeWarning", firstNonBlank(fieldByLabels(fields, labelByKey, List.of("公安预警", "公安预警（平台线索）")), "无"));
     person.put("relatedPerson", firstNonBlank(fieldByLabels(fields, labelByKey, List.of("关联人", "关联人基本情况")), "未填写"));
+    person.put("responsiblePerson", nameWithPhone(
+        fieldByLabels(fields, labelByKey, List.of("包保所领导", "包保所长", "包保派出所领导")),
+        fieldByLabels(fields, labelByKey, List.of("包保所领导电话", "包保所长电话", "包保派出所领导电话"))));
+    person.put("policeContact", nameWithPhone(
+        fieldByLabels(fields, labelByKey, List.of("包保民警", "包保派出所民警")),
+        fieldByLabels(fields, labelByKey, List.of("包保民警手机号", "包保民警电话", "包保派出所民警电话"))));
+    person.put("community", nameWithPhone(
+        fieldByLabels(fields, labelByKey, List.of("包保社区干部", "社区包保人员", "社区包保干部")),
+        fieldByLabels(fields, labelByKey, List.of("包保社区干部电话", "社区包保人员手机号", "社区包保人员电话", "包保社区干部手机号"))));
     person.put("latestNote", firstNonBlank(fieldByLabels(fields, labelByKey, List.of("备注", "就诊情况")), "未填写"));
     person.put("photoUrl", null);
     person.put("excelFields", fields);
-    person.put("fundIdentity", Map.of("idNumber", idNumber, "name", name));
+    person.put("visibleInvestorName", visibleInvestor.name());
+    person.put("visibleInvestorIdNumber", visibleInvestor.idNumber());
+    person.put("visibleInvestorPhone", visibleInvestor.phone());
+    Map<String, Object> fundIdentity = new LinkedHashMap<>();
+    fundIdentity.put("idNumber", idNumber);
+    fundIdentity.put("name", name);
+    fundIdentity.put("visibleName", visibleInvestor.name());
+    fundIdentity.put("visibleIdNumber", visibleInvestor.idNumber());
+    fundIdentity.put("visiblePhone", visibleInvestor.phone());
+    person.put("fundIdentity", fundIdentity);
     return person;
+  }
+
+  private VisibleInvestorIdentity visibleInvestorIdentity(String name, String idNumber, String phone) {
+    String cleanName = firstNonBlank(name);
+    String cleanIdNumber = firstNonBlank(idNumber);
+    String cleanPhone = firstNonBlank(phone);
+    Map<String, Object> visiblePerson = findVisiblePerson(cleanIdNumber, cleanName);
+    if (visiblePerson != null) {
+      cleanName = firstNonBlank(String.valueOf(visiblePerson.getOrDefault("name", "")), cleanName);
+      cleanIdNumber = firstNonBlank(String.valueOf(visiblePerson.getOrDefault("idNumber", "")), cleanIdNumber);
+      cleanPhone = firstNonBlankMeaningful(String.valueOf(visiblePerson.getOrDefault("phone", "")), cleanPhone);
+    }
+    return new VisibleInvestorIdentity(cleanName, cleanIdNumber, cleanPhone);
+  }
+
+  private Map<String, Object> findVisiblePerson(String idNumber, String name) {
+    String cleanIdNumber = firstNonBlank(idNumber);
+    String cleanName = firstNonBlank(name);
+    if (!cleanIdNumber.isBlank()) {
+      Map<String, Object> visiblePerson = adminPeopleService.findByIdentity(cleanIdNumber, "")
+          .orElse(null);
+      if (visiblePerson != null) return visiblePerson;
+    }
+    if (!cleanName.isBlank()) {
+      return adminPeopleService.findByIdentity("", cleanName)
+          .orElse(null);
+    }
+    return null;
+  }
+
+  private String firstNonBlankMeaningful(String... values) {
+    for (String value : values) {
+      String text = firstNonBlank(value);
+      if (!text.isBlank() && !"未填写".equals(text) && !"无".equals(text)) return text;
+    }
+    return "";
+  }
+
+  private String cleanImportedLookupValue(String value) {
+    String text = firstNonBlank(value);
+    if (text.isBlank()) return "";
+    String upper = text.toUpperCase();
+    if ("#N/A".equals(upper) || upper.contains("XLOOKUP") || text.startsWith("_xlfn.") || text.startsWith("=")) return "";
+    return text;
+  }
+
+  private String cleanImportedIdNumber(String value) {
+    String text = cleanImportedLookupValue(value);
+    return looksLikeIdNumber(text) ? text : "";
+  }
+
+  private String hiddenVisitDetail(Map<String, Object> fields, Map<String, String> labelByKey) {
+    List<String> parts = new ArrayList<>();
+    addCountPart(parts, "省金融监管局", fieldByLabels(fields, labelByKey, List.of("到省金融监管局上访（次）", "省金融监管局次数", "到省金融监管局")), "次");
+    addCountPart(parts, "北京职场", fieldByLabels(fields, labelByKey, List.of("到北京职场上访（次）", "北京职场次数", "到职场上访（次）", "到职场")), "次");
+    addCountPart(parts, "金融大厦", fieldByLabels(fields, labelByKey, List.of("到中融大厦上访（次）", "金融大厦次数", "中融大厦")), "次");
+    return parts.isEmpty() ? "无" : String.join("，", parts);
+  }
+
+  private String hiddenOnlineSpeech(Map<String, Object> fields, Map<String, String> labelByKey) {
+    List<String> parts = new ArrayList<>();
+    addCountPart(parts, "涉及ZR群", fieldByLabels(fields, labelByKey, List.of("涉及多少个ZR群", "涉及中融群个数", "涉及ZR群")), "个");
+    addCountPart(parts, "挑头", fieldByLabels(fields, labelByKey, List.of("网络发声挑头数据", "挑头人员预警次数", "挑头数据")), "次");
+    addCountPart(parts, "响应", fieldByLabels(fields, labelByKey, List.of("网络发声响应数据", "响应人员预警次数", "响应数据")), "次");
+    return parts.isEmpty() ? "无" : String.join("，", parts);
+  }
+
+  private void addCountPart(List<String> parts, String label, String value, String unit) {
+    String cleaned = firstNonBlank(value);
+    if (cleaned.isBlank() || "0".equals(cleaned) || "0.0".equals(cleaned)) return;
+    String withoutUnit = cleaned.endsWith(unit) ? cleaned.substring(0, cleaned.length() - unit.length()) : cleaned;
+    parts.add(label + withoutUnit + unit);
+  }
+
+  private String nameWithPhone(String name, String phone) {
+    String cleanedName = firstNonBlank(name);
+    String cleanedPhone = firstNonBlank(phone);
+    if (cleanedName.isBlank() && cleanedPhone.isBlank()) return "未填写";
+    if (cleanedName.isBlank()) return cleanedPhone;
+    if (cleanedPhone.isBlank()) return cleanedName;
+    return cleanedName + " " + cleanedPhone;
   }
 
   private Map<String, Object> fields(Map<String, Object> row) {
@@ -685,15 +890,19 @@ public class AdminExcelImportService {
     }
   }
 
+  private record RelatedFieldRelation(String relation, RelatedIdentity identity) {}
+
+  private record VisibleInvestorIdentity(String name, String idNumber, String phone) {}
+
   private Map<String, Object> hiddenGroups(
       Map<String, Integer> counts,
       Map<String, Map<String, Integer>> districtCounts,
       int otherCount) {
     Map<String, Object> groups = new LinkedHashMap<>();
-    groups.put("organizers", group("一级隐名投资人", counts.getOrDefault("organizers", 0), "一级风险隐名投资人", "red", summary(districtCounts.get("organizers"))));
-    groups.put("responders", group("二级隐名投资人", counts.getOrDefault("responders", 0), "二级风险隐名投资人", "yellow", summary(districtCounts.get("responders"))));
-    groups.put("general", group("三级隐名投资人", counts.getOrDefault("general", 0), "三级风险隐名投资人", "blue", summary(districtCounts.get("general"))));
-    groups.put("watch", group("四级隐名投资人", counts.getOrDefault("watch", 0), "四级风险隐名投资人", "teal", summary(districtCounts.get("watch"))));
+    groups.put("organizers", group("组织串联人员", counts.getOrDefault("organizers", 0), "网上串联、现场组织或到场40次以上", "red", summary(districtCounts.get("organizers"))));
+    groups.put("responders", group("活跃响应人员", counts.getOrDefault("responders", 0), "到场20次以上、40次以下；群内响应、发表过极端言论或意见领袖", "yellow", summary(districtCounts.get("responders"))));
+    groups.put("general", group("一般参与人员", counts.getOrDefault("general", 0), "有到场行为", "blue", summary(districtCounts.get("general"))));
+    groups.put("watch", group("密切关注人员", counts.getOrDefault("watch", 0), "有过极端言论或意见领袖，未到场或仅群内响应", "teal", summary(districtCounts.get("watch"))));
     groups.put("arrived", group("到场非投资人", 0, "户籍地分布", "blue", ""));
     groups.put("hidden", group("其他隐名投资人", otherCount, "户籍地分布", "teal", ""));
     return groups;
@@ -773,6 +982,103 @@ public class AdminExcelImportService {
     return byCount != 0 ? byCount : left.getKey().compareTo(right.getKey());
   }
 
+  private List<List<Object>> occupationRows(List<Map<String, Object>> people) {
+    Map<String, Long> counts = new LinkedHashMap<>();
+    for (Map<String, Object> person : people) {
+      String occupation = String.valueOf(person.getOrDefault("occupation", "")).trim();
+      if (occupation.isBlank() || "null".equals(occupation)) occupation = "未填写";
+      counts.merge(occupation, 1L, Long::sum);
+    }
+    return counts.entrySet().stream()
+        .sorted(this::compareRegionCountDesc)
+        .map(entry -> List.of((Object) entry.getKey(), (Object) entry.getValue()))
+        .toList();
+  }
+
+  private List<List<Object>> genderRows(List<Map<String, Object>> people) {
+    Map<String, Long> counts = new LinkedHashMap<>();
+    for (Map<String, Object> person : people) {
+      String gender = String.valueOf(person.getOrDefault("gender", "")).trim();
+      if (!"男".equals(gender) && !"女".equals(gender)) gender = "未填写";
+      counts.merge(gender, 1L, Long::sum);
+    }
+    return counts.entrySet().stream()
+        .sorted(this::compareRegionCountDesc)
+        .map(entry -> List.of((Object) entry.getKey(), (Object) entry.getValue()))
+        .toList();
+  }
+
+  private List<List<Object>> libraryLevelRows(List<Map<String, Object>> people) {
+    Map<String, Long> counts = new LinkedHashMap<>();
+    for (Map<String, Object> person : people) {
+      String status = String.valueOf(person.getOrDefault("libraryStatus", "")).trim().toUpperCase();
+      String level = "";
+      if (status.contains("C级") || status.contains("C級") || status.contains("C级".toUpperCase())) level = "C级";
+      if (status.contains("D级") || status.contains("D級") || status.contains("D级".toUpperCase())) level = "D级";
+      if (!level.isBlank()) counts.merge(level, 1L, Long::sum);
+    }
+    return counts.entrySet().stream()
+        .sorted(this::compareRegionCountDesc)
+        .map(entry -> List.of((Object) entry.getKey(), (Object) entry.getValue()))
+        .toList();
+  }
+
+  private List<List<Object>> clinicDepartmentRows(List<Map<String, Object>> people) {
+    Map<String, Long> counts = new LinkedHashMap<>();
+    for (Map<String, Object> person : people) {
+      String note = String.valueOf(person.getOrDefault("latestNote", "")).trim();
+      for (String department : outpatientDepartments(note)) {
+        counts.merge(department, 1L, Long::sum);
+      }
+    }
+    return counts.entrySet().stream()
+        .sorted(this::compareRegionCountDesc)
+        .map(entry -> List.of((Object) entry.getKey(), (Object) entry.getValue()))
+        .toList();
+  }
+
+  private List<String> outpatientDepartments(String note) {
+    if (note == null || note.isBlank() || "未填写".equals(note)) return List.of();
+    List<String> departments = new ArrayList<>();
+    for (String segment : MEDICAL_SEGMENT_PATTERN.split(note)) {
+      String text = segment.trim();
+      if (text.isBlank() || !text.contains("门诊")) continue;
+      if (text.contains("就诊类型") && text.contains("住院") && !text.contains("就诊类型：门诊") && !text.contains("就诊类型:门诊")) {
+        continue;
+      }
+      String department = outpatientDepartment(text);
+      if (!department.isBlank()) departments.add(department);
+    }
+    return departments;
+  }
+
+  private String outpatientDepartment(String text) {
+    Matcher matcher = OUTPATIENT_DEPARTMENT_PATTERN.matcher(text);
+    if (!matcher.find()) return "";
+    String clinic = matcher.group(1)
+        .replaceAll("[，,；;。].*$", "")
+        .replaceAll("门诊.*$", "门诊");
+    return normalizeClinicDepartment(clinic);
+  }
+
+  private String normalizeClinicDepartment(String clinic) {
+    String text = String.valueOf(clinic == null ? "" : clinic)
+        .replace("门诊", "")
+        .replaceAll("[\\s　]+", "")
+        .trim();
+    if (text.isBlank()) return "";
+
+    text = text.replaceFirst("^.*(?:医院|卫生院|门诊部|卫生服务中心|卫生服务站|医大[^，,；;。\\s]*|医疗中心|体检中心|急救中心|分院|院区|中心)", "");
+    Matcher deptMatcher = Pattern.compile("([\\u4e00-\\u9fa5]{1,12}科)[一二三四五六七八九十0-9]*$").matcher(text);
+    if (deptMatcher.find()) return deptMatcher.group(1);
+
+    text = text
+        .replaceAll("^[东西南北中]?(?:院区|分院|医院|中心)", "")
+        .replaceAll("[一二三四五六七八九十0-9]+$", "")
+        .trim();
+    return text;
+  }
+
   private List<Map<String, Object>> riskBars(Map<String, Integer> counts) {
     return List.of(
         Map.of("label", "一级", "values", List.of(counts.getOrDefault("organizers", 0), 0, 0, 0)),
@@ -807,7 +1113,7 @@ public class AdminExcelImportService {
   }
 
   private List<Integer> clinicBars() {
-    return List.of(94, 76, 70, 64, 58, 52, 47, 42, 38, 34, 30, 27, 24, 22, 19, 17, 15, 13, 11, 10, 8, 7, 6, 5);
+    return List.of();
   }
 
   private boolean matchesHiddenInvestorFilters(Map<String, Object> person, Map<String, String> params) {
@@ -815,7 +1121,7 @@ public class AdminExcelImportService {
     if (!group.isBlank() && !"all".equals(group)) {
       String personGroup = String.valueOf(person.getOrDefault("group", ""));
       if ("hidden".equals(group)) {
-        if (!personGroup.isBlank()) return false;
+        if (!personGroup.isBlank() || !isHeilongjiangUnclassifiedHiddenInvestor(person)) return false;
       } else if (!group.equals(personGroup)) {
         return false;
       }
@@ -896,11 +1202,11 @@ public class AdminExcelImportService {
 
   private String riskLabel(String group) {
     return switch (group) {
-      case "organizers" -> "一级";
-      case "responders" -> "二级";
-      case "watch" -> "四级";
+      case "organizers" -> "组织串联";
+      case "responders" -> "活跃响应";
+      case "watch" -> "密切关注";
       case "arrived" -> "未分级";
-      default -> "三级";
+      default -> "一般参与";
     };
   }
 
@@ -920,7 +1226,16 @@ public class AdminExcelImportService {
   }
 
   private boolean isHeilongjiangHiddenInvestor(Map<String, Object> person) {
-    return isHeilongjiangProvince(String.valueOf(person.getOrDefault("householdProvince", "")));
+    String province = String.valueOf(person.getOrDefault("householdProvince", ""));
+    String city = String.valueOf(person.getOrDefault("householdCity", ""));
+    String district = String.valueOf(person.getOrDefault("householdDistrict", ""));
+    String displayDistrict = String.valueOf(person.getOrDefault("district", ""));
+    return isHeilongjiangProvince(province)
+        || isHarbinCity(city)
+        || isHeilongjiangNonHarbinCity(dashboardArea(city))
+        || isHarbinArea(dashboardArea(district))
+        || isHarbinArea(dashboardArea(displayDistrict))
+        || isHeilongjiangNonHarbinCity(dashboardArea(displayDistrict));
   }
 
   private boolean isHeilongjiangUnclassifiedHiddenInvestor(Map<String, Object> person) {

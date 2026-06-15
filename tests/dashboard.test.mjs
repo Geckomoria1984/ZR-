@@ -7,6 +7,12 @@ import {
   getPersonById,
   buildProfileRows,
   buildDetailRows,
+  graphHasLowerInvestor,
+  graphHasVisibleInvestor,
+  fundRelationPath,
+  profileUsesHiddenInvestorFields,
+  categoryGroupKeysForScope,
+  shouldOpenVisibleProfileFromGraphNode,
   filterPeople,
   paginatePeople,
   chunkPeople,
@@ -74,6 +80,88 @@ describe('dashboard data contract', () => {
     assert.ok(rows.some((row) => row.label === '背后是否存在隐性投资人' && row.value === '无'));
   });
 
+  it('checks hidden investors behind the current graph person rather than any graph edge', () => {
+    const graph = {
+      nodes: [
+        { id: 'id-visible', fullLabel: '显名投资人', primary: true },
+        { id: 'id-hidden-current', fullLabel: '当前隐名', primary: false },
+        { id: 'id-hidden-lower', fullLabel: '下层隐名', primary: false },
+      ],
+      edges: [
+        { source: 'id-hidden-current', target: 'id-visible' },
+        { source: 'id-hidden-lower', target: 'id-hidden-current' },
+      ],
+    };
+
+    assert.equal(graphHasLowerInvestor(graph, { idNumber: 'hidden-current', name: '当前隐名' }), true);
+    assert.equal(graphHasLowerInvestor({
+      ...graph,
+      edges: [{ source: 'id-hidden-current', target: 'id-visible' }],
+    }, { idNumber: 'hidden-current', name: '当前隐名' }), false);
+    assert.equal(graphHasLowerInvestor(graph, { idNumber: 'visible', name: '显名投资人' }), true);
+  });
+
+  it('shows whether a hidden investor has a visible investor', () => {
+    const rows = buildDetailRows({
+      ...getPersonById(people[0].id),
+      fundVisibleInvestor: true,
+    }, { isHiddenScope: true, hasVisibleInvestor: true });
+
+    assert.ok(rows.some((row) => row.label === '是否存在显性投资人' && row.value === '有'));
+    assert.ok(!rows.some((row) => row.label === '背后是否存在隐性投资人'));
+  });
+
+  it('detects a visible investor node for hidden investor fund graphs', () => {
+    const hiddenPerson = { idNumber: 'hidden-current', name: '当前隐名' };
+    assert.equal(graphHasVisibleInvestor({
+      nodes: [
+        { id: 'id-visible', fullLabel: '显名投资人', level: '显名投资人', primary: true },
+        { id: 'id-hidden-current', fullLabel: '当前隐名', level: '一层', primary: false },
+      ],
+      edges: [{ source: 'id-hidden-current', target: 'id-visible' }],
+    }, hiddenPerson), true);
+    assert.equal(graphHasVisibleInvestor({
+      nodes: [
+        { id: 'id-hidden-current', fullLabel: '当前隐名', level: '一层', primary: true },
+        { id: 'id-hidden-lower', fullLabel: '下层隐名', level: '二层', primary: false },
+      ],
+      edges: [{ source: 'id-hidden-lower', target: 'id-hidden-current' }],
+    }, hiddenPerson), false);
+  });
+
+  it('opens matched visible personal details from visible investor graph nodes in hidden scope', () => {
+    assert.equal(shouldOpenVisibleProfileFromGraphNode({
+      id: 'id-23010219520801342X',
+      fullLabel: '唐利香',
+      level: '显名投资人',
+    }, true), true);
+    assert.equal(shouldOpenVisibleProfileFromGraphNode({
+      id: 'id-230102197810141327',
+      fullLabel: '杨馨嘉',
+      level: '一层',
+    }, true), false);
+    assert.equal(shouldOpenVisibleProfileFromGraphNode({
+      id: 'id-23010219520801342X',
+      fullLabel: '唐利香',
+      level: '显名投资人',
+    }, false), false);
+    assert.equal(profileUsesHiddenInvestorFields({ id: 'hidden-230102197810141327' }, true), true);
+    assert.equal(profileUsesHiddenInvestorFields({ id: 'p18' }, true), false);
+  });
+
+  it('passes hidden imported visible investor identity into fund graph lookup', () => {
+    const path = fundRelationPath({
+      id: 'hidden-230104196812133126',
+      fundIdentity: { idNumber: '230104196812133126', name: '李晓丹', visibleName: '李琳琳' },
+      visibleInvestorName: '李琳琳',
+      visibleInvestorIdNumber: '',
+    });
+
+    assert.match(path, /\/api\/admin\/fund-relations\/identity\?/);
+    assert.match(path, /idNumber=230104196812133126/);
+    assert.match(path, /visibleName=%E6%9D%8E%E7%90%B3%E7%90%B3/);
+  });
+
   it('filters people by query and locality', () => {
     const target = people.find((person) => person.locality === '本市');
     const filtered = filterPeople(people, {
@@ -135,6 +223,7 @@ describe('dashboard data contract', () => {
   it('uses the backend fund relation graph in homepage personal details', () => {
     const html = readFileSync(new URL('../frontend/index.html', import.meta.url), 'utf8');
     const script = readFileSync(new URL('../frontend/src/app.js', import.meta.url), 'utf8');
+    const styles = readFileSync(new URL('../frontend/src/styles.css', import.meta.url), 'utf8');
 
     assert.match(html, /资金关系图谱预览/);
     assert.match(html, /v-for="node in fundGraphNodes"/);
@@ -149,6 +238,7 @@ describe('dashboard data contract', () => {
     assert.match(script, /fundNodeLevelRank/);
     assert.match(script, /向上层投资金额：/);
     assert.match(script, /Math\.round\(amountInWan\)/);
+    assert.match(styles, /\.fund-node-html \.fund-node-amount\s*\{[\s\S]*font-size:\s*inherit/);
   });
 
   it('links from the homepage into the admin management page', () => {
@@ -162,16 +252,28 @@ describe('dashboard data contract', () => {
     const html = readFileSync(new URL('../frontend/index.html', import.meta.url), 'utf8');
     const script = readFileSync(new URL('../frontend/src/app.js', import.meta.url), 'utf8');
 
+    assert.match(html, /<title>黑龙江省ZR群体架构图<\/title>/);
+    assert.match(script, /VISIBLE_DASHBOARD_TITLE = '黑龙江省ZR群体架构图'/);
+    assert.match(script, /VISIBLE_DASHBOARD_TOTAL = 1041/);
+    assert.match(script, /: VISIBLE_DASHBOARD_TOTAL/);
     assert.match(html, /goHiddenDashboard/);
     assert.match(html, /进入隐名首页/);
     assert.match(html, /返回显名首页/);
     assert.match(html, /dashboardTitle/);
     assert.match(script, /dashboardScope/);
     assert.match(script, /scope=hidden/);
+    assert.match(script, /hiddenFallbackGroups/);
+    assert.match(script, /people:\s*initialScope === 'hidden' \? \[\] : fallbackPeople/);
+    assert.match(script, /groups:\s*initialScope === 'hidden' \? hiddenFallbackGroups : fallbackGroups/);
     assert.match(script, /\/api\/dashboard\/hidden-investors/);
     assert.match(script, /\/api\/dashboard\/hidden-investors\/people/);
     assert.match(script, /localDashboardPeople/);
     assert.match(script, /personMatchesAmountBucket/);
+  });
+
+  it('keeps the hidden dashboard category strip focused on third and fourth level people', () => {
+    assert.deepEqual(categoryGroupKeysForScope(false), ['general', 'watch']);
+    assert.deepEqual(categoryGroupKeysForScope(true), ['general', 'watch']);
   });
 
   it('renders clickable investment amount buckets as a table drawer', () => {
@@ -262,7 +364,7 @@ describe('dashboard data contract', () => {
     }
   });
 
-  it('exports the four primary group drawers as A3 color PDF print pages', () => {
+  it('exports the four primary group drawers as A3 color PDF print pages with full-size cards', () => {
     const html = readFileSync(new URL('../frontend/index.html', import.meta.url), 'utf8');
     const script = readFileSync(new URL('../frontend/src/app.js', import.meta.url), 'utf8');
 
@@ -280,7 +382,8 @@ describe('dashboard data contract', () => {
     assert.match(script, /print-color-adjust: exact/);
     assert.match(script, /printLayoutForCount/);
     assert.match(script, /columns: 14/);
-    assert.match(script, /compactDrawerGroupKeys = \['general', 'watch'\]/);
+    assert.match(script, /compactDrawerGroupKeys = \[\]/);
+    assert.doesNotMatch(script, /drawer-grid-watch-optimal/);
     assert.match(script, /groupSize: 1000/);
     assert.match(html, /list-dialog-compact/);
     assert.match(script, /person\.photoUrl/);
