@@ -184,47 +184,11 @@ function displayInvestmentAmount(person = {}) {
 }
 
 function displayResidenceArea(person = {}) {
-  const fields = person.excelFields || {};
-  const districtFieldValues = Object.entries(fields)
-    .filter(([label, value]) => {
-      const key = String(label || '').trim();
-      const text = String(value || '').trim();
-      return text && (key.startsWith('区') || key.includes('户籍区') || key.includes('户籍（区）') || key.includes('户籍(区)'));
-    })
-    .map(([, value]) => value);
-  const dbValues = [
-    ...districtFieldValues,
-    person.householdAddress,
-    person.residenceAddress,
-    person.currentAddress,
-    person.address,
-    ...Object.values(fields),
-  ];
+  const district = firstDisplayValue(person.householdDistrict, person.district);
+  const address = firstDisplayValue(person.householdAddress, person.residenceAddress, person.address);
+  if (!address) return district || '未填写';
 
-  const districtStreet = dbValues
-    .map((value) => extractDistrictStreetAddress(value, person.district))
-    .find(Boolean);
-  if (districtStreet) return districtStreet;
-
-  const directValue = firstDisplayValue(
-    person.householdDistrict,
-    fields['户籍（区）'],
-    fields['户籍(区)'],
-    fields['户籍区'],
-    fields['区县'],
-    fields['区'],
-    fields['区划'],
-    fields['区县名称'],
-  );
-  if (directValue) return directValue;
-
-  const districtEntry = Object.entries(fields).find(([label, value]) => {
-    const key = String(label || '').trim();
-    const text = String(value || '').trim();
-    return key.startsWith('区') && text;
-  });
-  const address = firstDisplayValue(districtEntry?.[1], person.householdAddress, person.residenceAddress, '未填写');
-  return prependDistrictIfNeeded(person.district, address);
+  return extractDistrictStreetAddress(address, district) || prependDistrictIfNeeded(district, address);
 }
 
 function firstDisplayValue(...values) {

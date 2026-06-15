@@ -62,6 +62,20 @@ describe('dashboard data contract', () => {
     assert.ok(visibleRows.some((row) => row.label === '包保责任人' && row.value === '张三 13900000000'));
   });
 
+  it('keeps household address separate from current address in personal details', () => {
+    const rows = buildDetailRows({
+      name: '李秀玲',
+      district: '香坊',
+      address: '朝阳乡平顺村一组',
+      currentAddress: '道里区群力第五大道1736号圣约翰区2栋2单元1502室',
+      policeStation: '香坊分局松花路派出所',
+    });
+
+    assert.equal(rows.find((row) => row.label === '户籍地')?.value, '香坊区朝阳乡平顺村一组');
+    assert.equal(rows.find((row) => row.label === '现住址')?.value, '道里区群力第五大道1736号圣约翰区2栋2单元1502室');
+    assert.equal(rows.find((row) => row.label === '属地派出所')?.value, '香坊分局松花路派出所');
+  });
+
   it('marks hidden investor as present when fund graph has lower-level people', () => {
     const rows = buildDetailRows({
       ...getPersonById(people[0].id),
